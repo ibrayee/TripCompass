@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>TripCompass</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- Barra di ricerca -->
+<div id="search-bar">
+    <input type="text" id="city-input" placeholder="Search city..." />
+    <input type="text" id="origin-input" placeholder="Origin (e.g. ARN)" />
+    <input type="text" id="destination-input" placeholder="Destination (e.g. FCO)" />
+    <input type="date" id="checkin-input" />
+    <button onclick="searchCity()">Search</button>
+</div>
+
+
+<!-- Mappa -->
+<div id="map"></div>
+
+<!-- Sidebar nascosta di default -->
+<div id="sidebar" class="hidden">
+    <div id="results"></div>
+</div>
+
+<!-- Script -->
+<script src="js/searchBar.js"></script>
+<script src="js/sidebar.js"></script>
+<script src="js/map.js"></script>
+<script
+        async
+        defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrGvXIcYVGUllsp39JAWkg1t2DA8jFMI0&callback=initMap"
+></script>
+</body>
+</html>

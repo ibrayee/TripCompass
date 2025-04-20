@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TripCompass Map</title>
+  <meta charset="UTF-8">
+  <style>
+    /* Make the map fill the entire viewport */
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  let map;          // The map object.
+  let marker = null; // Variable to hold the current marker.
+  let geocoder;      // Geocoder instance.
+  let infoWindow;    // InfoWindow to show information.
+
+  function initMap() {
+    // Set a default location (e.g., New York City).
+    const defaultLocation = {lat: -40.7128, lng: +74.0060};
+
+    // Initialize the map.
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: defaultLocation,
+      zoom: 8
+    });
+
+    // Initialize Geocoder and InfoWindow.
+    geocoder = new google.maps.Geocoder();
+    infoWindow = new google.maps.InfoWindow();
+
+    // Listen for clicks on the map.
+    map.addListener("click", function(event) {
+      const clickedLat = event.latLng.lat();
+      const clickedLng = event.latLng.lng();
+
+      // Remove the previous marker (if any)
+      if (marker) {
+        marker.setMap(null);
+      }
+
+      // Place a new marker at the clicked location
+      marker = new google.maps.Marker({
+        position: { lat: clickedLat, lng: clickedLng },
+        map: map,
+        title: "Selected Location"
+      });
+
+      // Call the backend to fetch nearby search results using the clicked coordinates
+      fetch(`/search/nearby?lat=${clickedLat}&lng=${clickedLng}`)
+              .then(response => response.json())
+              .then(data => {
+                // Build a content string based on the backend response
+                const contentString = `
+                <div>
+                  <strong>${data.message}</strong><br/>
+                  <em>Latitude:</em> ${data.latitude}<br/>
+                  <em>Longitude:</em> ${data.longitude}
+                </div>
+              `;
+                // Set and open the info window on the marker
+                infoWindow.setContent(contentString);
+                infoWindow.open(map, marker);
+              })
+              .catch(error => {
+                console.error("Error fetching nearby data:", error);
+              });
+    });
+  }
+</script>
+
+<script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrGvXIcYVGUllsp39JAWkg1t2DA8jFMI0&callback=initMap">
+</script>
+</body>
+</html>
