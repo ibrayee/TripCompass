@@ -10,6 +10,7 @@ import com.google.gson.JsonElement;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class AmadeusService {
     private final Gson gson = new Gson();
@@ -21,13 +22,14 @@ public class AmadeusService {
     }
 
     public String getNearestAirport(double lat, double lng) throws ResponseException {
-        DecimalFormat df = new DecimalFormat("0.######");
-        String latStr = df.format(lat);
-        String lngStr = df.format(lng);
+        String latStr = String.format(Locale.US, "%.6f", lat);
+        String lngStr = String.format(Locale.US, "%.6f", lng);
+        System.out.println("Calling Amadeus with lat=" + latStr + ", lng=" + lngStr);
+
 
         Params params = Params.with("latitude", latStr)
                 .and("longitude", lngStr)
-                .and("radius", "100")
+                .and("radius", "200")
                 .and("radiusUnit", "KM")
                 .and("subType", "AIRPORT")
                 .and("page[limit]", "1");
@@ -44,9 +46,11 @@ public class AmadeusService {
 
     public List<String> getNearbyAirports(double lat, double lng, int radiusKm, int limit) throws ResponseException {
         List<String> airportCodes = new ArrayList<>();
+        String latStr = String.format(Locale.US, "%.6f", lat);
+        String lngStr = String.format(Locale.US, "%.6f", lng);
 
-        Params params = Params.with("latitude", lat)
-                .and("longitude", lng)
+        Params params = Params.with("latitude", latStr)
+                .and("longitude", lngStr)
                 .and("radius", radiusKm)
                 .and("radiusUnit", "KM")
                 .and("subType", "AIRPORT")
@@ -97,17 +101,22 @@ public class AmadeusService {
     public double[] geocodeCityToCoords(String cityName) {
         try {
             Params params = Params.with("keyword", cityName)
-                    .and("subType", "CITY")
+                    .and("subType", "CITY,AIRPORT")
                     .and("page[limit]", 1);
             Location[] results = amadeus.referenceData.locations.get(params);
 
-            if (results.length > 0 && results != null) {
+            if (results != null && results.length > 0 && results[0].getGeoCode() != null) {
                 Location.GeoCode geo = results[0].getGeoCode();
-                return new double[]{geo.getLongitude(), geo.getLatitude()};
+                System.out.println("→ Geocoded " + cityName + " to: " + geo.getLatitude() + ", " + geo.getLongitude());
+                return new double[]{geo.getLatitude(), geo.getLongitude()};
+            } else {
+                System.out.println("[WARN] No geocode result for: " + cityName);
             }
-        }catch (Exception e) {
+        } catch (Exception e) {
             System.out.println("[ERROR] Failed to geocode city: " + cityName);
+            e.printStackTrace();
         }
         return null;
     }
+
 }

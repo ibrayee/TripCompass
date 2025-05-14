@@ -1,4 +1,4 @@
-let map, marker;
+let map, marker, userCoords = null;
 
 function initMap() {
     const defaultLocation = { lat: 41.9028, lng: 12.4964 }; // Rome
@@ -6,28 +6,42 @@ function initMap() {
     map = new google.maps.Map(document.getElementById("map"), {
         center: defaultLocation,
         zoom: 6,
+        mapId: "bf198408fe296ef1"
     });
 
-    // Make accessible globally
-    window.map = map;
-    window.initMap = initMap;
+    // Geolocalizza utente al load
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                userCoords = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                console.log("User location:", userCoords);
+            },
+            () => alert("Geolocation failed.")
+        );
+    }
 
+    // Click sulla mappa = destinazione
     map.addListener("click", (e) => {
+        if (!userCoords) {
+            alert("User location not available yet.");
+            return;
+        }
         requestTripInfo(e.latLng.lat(), e.latLng.lng());
     });
 }
 
-function requestTripInfo(lat, lng) {
+function requestTripInfo(destLat, destLng) {
     if (marker) marker.setMap(null);
-    marker = new google.maps.Marker({ position: { lat, lng }, map: map });
+    marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
 
-    const origin = document.getElementById("origin-input").value || "ARN";
-    const destination = document.getElementById("destination-input").value || "FCO";
-    const checkInDate = document.getElementById("checkin-input").value || "2025-06-01";
+    const checkInDate = document.getElementById("checkin-input").value || "2025-06-03";
     const adults = 1;
     const roomQuantity = 1;
 
-    const url = `/trip-info?lat=${lat}&lng=${lng}&origin=${origin}&destination=${destination}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
+    const url = `/trip-info?lat=${destLat}&lng=${destLng}&originLat=${userCoords.lat}&originLng=${userCoords.lng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
 
     fetch(url)
         .then(async res => {
@@ -46,6 +60,4 @@ function requestTripInfo(lat, lng) {
             alert("Oops! " + err.message);
             hideSidebar();
         });
-
-
 }

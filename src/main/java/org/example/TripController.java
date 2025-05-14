@@ -87,6 +87,7 @@ public class TripController {
             double lng = Double.parseDouble(lngStr.trim());
             int adults = Integer.parseInt(adultsStr.trim());
             int rooms = Integer.parseInt(roomQuantityStr.trim());
+            System.out.println("Calling /trip-info with: " + lat + ", " + lng + ", " + originCity + ", " + checkInDate);
 
             // 3. Delegate to TripInfoService
             Map<String, Object> result = tripInfoService.getTripInfo(
@@ -120,6 +121,7 @@ public class TripController {
                     "message", e.getMessage()
             ));
         }
+
     }
     private static void handleFlightSearch(Context ctx) {
         String origin = ctx.queryParam("origin");

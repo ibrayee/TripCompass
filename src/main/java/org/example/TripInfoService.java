@@ -40,21 +40,32 @@ public class TripInfoService {
             int adults,
             int rooms
     ) throws ResponseException {
-        // 1. Find nearest destination airport
+        System.out.println("STARTING TRIP INFO...");
+        System.out.println("Lat: " + lat + ", Lng: " + lng);
+        System.out.println("Origin city: " + originCity + ", Check-in: " + checkInDate);
+
+        System.out.println("→ Looking up nearest airport for destination...");
         String destinationAirport = amadeusService.getNearestAirport(lat, lng);
         if (destinationAirport == null) {
-            throw new IllegalStateException("No destination airport found");
+            System.out.println("[WARN] No main destination airport found. Trying nearby airports...");
+            List<String> nearby = amadeusService.getNearbyAirports(lat, lng, 200, 3);
+            if (!nearby.isEmpty()) {
+                destinationAirport = nearby.get(0);
+                System.out.println("→ Using fallback destination airport: " + destinationAirport);
+            } else {
+                throw new IllegalStateException("No destination airport found within 200km.");
+            }
         }
 
-        // 2. Geocode origin city and find nearest origin airport
+        System.out.println("→ Geocoding origin city: " + originCity);
         double[] originCoords = amadeusService.geocodeCityToCoords(originCity);
-        if (originCoords == null) {
-            throw new IllegalArgumentException("Could not geolocate origin city");
-        }
+        if (originCoords == null) throw new IllegalArgumentException("Could not geolocate origin city");
+        System.out.println("→ Origin coords: " + Arrays.toString(originCoords));
+
         String originAirport = amadeusService.getNearestAirport(originCoords[0], originCoords[1]);
-        if (originAirport == null) {
-            throw new IllegalStateException("No origin airport found");
-        }
+        System.out.println("→ Found origin airport: " + originAirport);
+        if (originAirport == null) throw new IllegalStateException("No origin airport found");
+
 
         // 3. Search hotel offers (limit to top 3)
         List<Map<String, Object>> hotelOffers = new ArrayList<>();
@@ -83,9 +94,9 @@ public class TripInfoService {
                 .getAsJsonArray();
 
         if (flightArray.size() == 0) {
-            // try fallback airports (3 alternatives within 100km)
+            System.out.println("[WARN] No direct flights found, trying fallback airports...");
             List<String> altOrigins = amadeusService.getNearbyAirports(originCoords[0], originCoords[1], 100, 3);
-            List<String> altDests   = amadeusService.getNearbyAirports(lat, lng, 100, 3);
+            List<String> altDests = amadeusService.getNearbyAirports(lat, lng, 100, 3);
             outer:
             for (String altOrig : altOrigins) {
                 for (String altDest : altDests) {
@@ -98,12 +109,14 @@ public class TripInfoService {
                             flightArray = altArray;
                             originAirport = altOrig;
                             destinationAirport = altDest;
+                            System.out.println("→ Fallback flight found: " + altOrig + " → " + altDest);
                             break outer;
                         }
                     } catch (ResponseException ignored) {}
                 }
             }
         }
+
 
         // 5. Simplify flight offers (limit to top 3)
         JsonArray simplifiedFlights = new JsonArray();
