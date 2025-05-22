@@ -5,10 +5,9 @@ import com.amadeus.Amadeus;
 import com.amadeus.Params;
 import com.amadeus.exceptions.ResponseException;
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 
-import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -24,15 +23,14 @@ public class AmadeusService {
     public String getNearestAirport(double lat, double lng) throws ResponseException {
         String latStr = String.format(Locale.US, "%.6f", lat);
         String lngStr = String.format(Locale.US, "%.6f", lng);
-        System.out.println("Calling Amadeus with lat=" + latStr + ", lng=" + lngStr);
 
+        System.out.println("[DEBUG] NearestAirport: lat=" + latStr + " lng=" + lngStr);
 
         Params params = Params.with("latitude", latStr)
                 .and("longitude", lngStr)
-                .and("radius", "200")
-                .and("radiusUnit", "KM")
+                .and("radius", 100)
                 .and("subType", "AIRPORT")
-                .and("page[limit]", "1");
+                .and("page[limit]", 1);
 
         Location[] locations = amadeus.referenceData.locations.get(params);
 
@@ -42,6 +40,7 @@ public class AmadeusService {
             return null;
         }
     }
+
 
 
     public List<String> getNearbyAirports(double lat, double lng, int radiusKm, int limit) throws ResponseException {
@@ -98,6 +97,7 @@ public class AmadeusService {
         );
         return gson.toJson(response);
     }
+
     public double[] geocodeCityToCoords(String cityName) {
         try {
             Params params = Params.with("keyword", cityName)
@@ -119,4 +119,32 @@ public class AmadeusService {
         return null;
     }
 
+    public String findNearestAirportCode(double lat, double lng) {
+        try {
+            String latStr = String.format(Locale.US, "%.6f", lat);
+            String lngStr = String.format(Locale.US, "%.6f", lng);
+
+            System.out.println("[DEBUG] Chiedo aeroporto con lat=" + latStr + ", lng=" + lngStr);
+
+            Params params = Params.with("latitude", latStr)
+                    .and("longitude", lngStr)
+                    .and("radius", 200)
+                    .and("page[limit]", 1);
+
+            Location[] locations = amadeus.referenceData.locations.airports.get(params);
+            System.out.println("Locations result: " + Arrays.toString(locations));
+            if (locations != null && locations.length > 0) {
+                return locations[0].getIataCode();
+            }
+            throw new IllegalArgumentException("No nearby airport found for your location");
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Failed to get nearest airport: " + e.getMessage());
+        }
+
+    }
+
+
+
 }
+

@@ -1,5 +1,6 @@
 let map, marker, userCoords = null;
 
+/* Called by Google Maps API */
 function initMap() {
     const defaultLocation = { lat: 41.9028, lng: 12.4964 }; // Rome
 
@@ -18,6 +19,22 @@ function initMap() {
                     lng: position.coords.longitude
                 };
                 console.log("User location:", userCoords);
+                map.setCenter(userCoords);
+                map.setZoom(10);
+
+                new google.maps.Marker({
+                    position: userCoords,
+                    map: map,
+                    title: "You are here!",
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 8,
+                        fillColor: "#4285F4",
+                        fillOpacity: 1,
+                        strokeWeight: 2,
+                        strokeColor: "#fff"
+                    }
+                })
             },
             () => alert("Geolocation failed.")
         );
@@ -41,7 +58,39 @@ function requestTripInfo(destLat, destLng) {
     const adults = 1;
     const roomQuantity = 1;
 
-    const url = `/trip-info?lat=${destLat}&lng=${destLng}&originLat=${userCoords.lat}&originLng=${userCoords.lng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
+    const originText = document.getElementById("origin-input").value.trim();
+
+    let url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
+
+    if (originText) {
+        url += `&origin=${encodeURIComponent(originText)}`;
+    } else if (userCoords) {
+        url += `&originLat=${userCoords.lat}&originLng=${userCoords.lng}`;
+    } else {
+        alert("Utent position not available and no origin insert!");
+        return;
+    }
+    fetch(`/nearby-airports?lat=${userCoords.lat}&lng=${userCoords.lng}&limit=5`)
+        .then(res => res.json())
+        .then(airports => {
+            airports.forEach(airport => {
+                // Aggiungi un marker per ogni aeroporto
+                const marker = new google.maps.Marker({
+                    position: { lat: airport.lat, lng: airport.lng },
+                    map: map,
+                    icon: "airport_icon.png", // icona diversa per gli aeroporti
+                    title: airport.name + " (" + airport.iata + ")"
+                });
+
+                marker.addListener("click", () => {
+                    // Quando clicchi l'aeroporto, imposta l'origine nel form
+                    document.getElementById('origin-input').value = airport.iata;
+                    // Optionale: apri info window
+                    infoWindow.setContent(`<strong>${airport.name}</strong> (${airport.iata})`);
+                    infoWindow.open(map, marker);
+                });
+            });
+        });
 
     fetch(url)
         .then(async res => {
@@ -51,7 +100,9 @@ function requestTripInfo(destLat, destLng) {
             }
             return res.json();
         })
+        // In map.js
         .then(data => {
+            console.log("Data received from backend:", data);
             renderSidebar(data);
             showSidebar();
         })

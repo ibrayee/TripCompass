@@ -1,4 +1,5 @@
 function renderSidebar(data) {
+    console.log("Sidebar data:", data);
     const container = document.getElementById("results");
     container.innerHTML = "";
 

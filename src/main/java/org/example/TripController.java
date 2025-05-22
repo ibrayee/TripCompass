@@ -52,6 +52,9 @@ public class TripController {
 
         // New: delegate to TripInfoService
         app.get("/trip-info", TripController::handleTripInfo);
+
+        app.get("/nearby-airports", TripController::handleNearbyAirports);
+
     }
 
     /**
@@ -62,19 +65,25 @@ public class TripController {
      * 4) Map exceptions to HTTP codes
      */
     private static void handleTripInfo(Context ctx) {
-        // 1. Validate presence and basic format of parameters
         String latStr = ctx.queryParam("lat");
         String lngStr = ctx.queryParam("lng");
-        String originCity = ctx.queryParam("origin");
+        String origin = ctx.queryParam("origin");
+        String originLatStr = ctx.queryParam("originLat");
+        String originLngStr = ctx.queryParam("originLng");
         String checkInDate = ctx.queryParam("checkInDate");
         String adultsStr = ctx.queryParam("adults");
         String roomQuantityStr = ctx.queryParam("roomQuantity");
 
+        boolean hasOriginCoords = originLatStr != null && originLngStr != null
+                && ValidationUtils.isValidCoordinates(originLatStr, originLngStr);
+
+        boolean hasOrigin = origin != null && !origin.isEmpty();
+
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)
-                || originCity == null || originCity.isEmpty()
                 || !ValidationUtils.isFutureDate(checkInDate)
                 || !ValidationUtils.isPositiveInteger(adultsStr)
-                || !ValidationUtils.isPositiveInteger(roomQuantityStr)) {
+                || !ValidationUtils.isPositiveInteger(roomQuantityStr)
+                || (!hasOrigin && !hasOriginCoords)) {
             ctx.status(400).json(Map.of(
                     "error", "Missing or invalid parameters"
             ));
@@ -82,40 +91,46 @@ public class TripController {
         }
 
         try {
-            // 2. Parse numeric values
-            double lat = Double.parseDouble(latStr.trim());
-            double lng = Double.parseDouble(lngStr.trim());
+            double lat = Double.parseDouble(originLatStr.trim().replace(",", "."));
+            double lng = Double.parseDouble(originLngStr.trim().replace(",", "."));
             int adults = Integer.parseInt(adultsStr.trim());
             int rooms = Integer.parseInt(roomQuantityStr.trim());
-            System.out.println("Calling /trip-info with: " + lat + ", " + lng + ", " + originCity + ", " + checkInDate);
 
-            // 3. Delegate to TripInfoService
+            String resolvedOrigin = null;
+            if (hasOrigin) {
+                resolvedOrigin = origin.trim();
+            } else if (hasOriginCoords) {
+                double oLat = Double.parseDouble(originLatStr.trim());
+                double oLng = Double.parseDouble(originLngStr.trim());
+                resolvedOrigin = amadeusService.findNearestAirportCode(oLat, oLng);
+            }
+            System.out.println("Origin used for airport search: " + resolvedOrigin);
+
+            if (resolvedOrigin == null || resolvedOrigin.isEmpty()) {
+                throw new IllegalArgumentException("Could not resolve origin airport");
+            }
+
             Map<String, Object> result = tripInfoService.getTripInfo(
-                    lat, lng, originCity, checkInDate, adults, rooms
+                    lat, lng, resolvedOrigin, checkInDate, adults, rooms
             );
 
-            // 4a. Success → return JSON
             ctx.contentType("application/json");
             ctx.json(result);
 
         } catch (IllegalArgumentException e) {
-            // Parameter parsing or geocoding error
             ctx.status(400).json(Map.of(
                     "error", e.getMessage()
             ));
         } catch (IllegalStateException e) {
-            // Missing resources (e.g. no airport found)
             ctx.status(404).json(Map.of(
                     "error", e.getMessage()
             ));
         } catch (ResponseException e) {
-            // Upstream API failure
             ctx.status(502).json(Map.of(
                     "error", "Upstream service error",
                     "details", e.getMessage()
             ));
         } catch (Exception e) {
-            // Fallback for any other errors
             ctx.status(500).json(Map.of(
                     "error", "Internal Server Error",
                     "message", e.getMessage()
@@ -123,6 +138,7 @@ public class TripController {
         }
 
     }
+
     private static void handleFlightSearch(Context ctx) {
         String origin = ctx.queryParam("origin");
         String destination = ctx.queryParam("destination");
@@ -238,6 +254,31 @@ public class TripController {
 
             ctx.contentType("application/json");
             ctx.result(new Gson().toJson(response));
+        } catch (Exception e) {
+            ctx.status(500).result("Internal Server Error: " + e.getMessage());
+        }
+    }
+    private static void handleNearbyAirports(Context ctx) {
+        String latStr = ctx.queryParam("lat");
+        String lngStr = ctx.queryParam("lng");
+        String limitStr = ctx.queryParam("limit");
+        int limit = 5; // default
+        if (limitStr != null && !limitStr.isEmpty()) {
+            try {
+                limit = Integer.parseInt(limitStr);
+            } catch (NumberFormatException ignored) {}
+        }
+        if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
+            ctx.status(400).result("Invalid coordinates");
+            return;
+        }
+        try {
+            double lat = Double.parseDouble(latStr);
+            double lng = Double.parseDouble(lngStr);
+
+            List<String> airports = amadeusService.getNearbyAirports(lat, lng, 200, limit);
+            // Se vuoi info aggiuntive sugli aeroporti, puoi modificarlo per restituire oggetti con nome, IATA, lat, lng...
+            ctx.json(airports);
         } catch (Exception e) {
             ctx.status(500).result("Internal Server Error: " + e.getMessage());
         }
