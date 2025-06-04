@@ -1,4 +1,4 @@
-package org.example;
+package org.example.GoogleMaps;
 
 import io.github.cdimascio.dotenv.Dotenv;
 
@@ -19,7 +19,13 @@ public class Maps {
 
     public static void main (String [] args) {
         System.out.println("API-nyckel: " + getGoogleApiKey());
-        Geocodes geocodes = new Geocodes("Malmö");
+       // Geocodes geocodes = new Geocodes("Malmö");
+        RouteInfo routeInfo = new RouteInfo("Malmö", "Stockholm");
+        routeInfo.fetchRoute();
+        System.out.println(routeInfo.getRouteTimeDist());
+
+        routeInfo.getPolyline();
+
 
     }
 

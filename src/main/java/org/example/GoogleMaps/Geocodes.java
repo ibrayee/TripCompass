@@ -1,4 +1,4 @@
-package org.example;
+package org.example.GoogleMaps;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -13,7 +13,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
-public class Geocodes {
+public class Geocodes {   //använder google maps geocodes API
 
     private String place;
     private double lng;  //longitude
