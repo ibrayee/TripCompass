@@ -22,7 +22,14 @@ public class Maps {
        // Geocodes geocodes = new Geocodes("Malmö");
         RouteInfo routeInfo = new RouteInfo("Malmö", "Stockholm");
         routeInfo.fetchRoute();
-        System.out.println(routeInfo.getRouteTimeDist());
+        System.out.println(routeInfo.getRouteTimeAndDist());
+
+
+        PlacesNearby places = new PlacesNearby("59.3293", "18.0686"); // Stockholm
+
+        String restaurantInfo = places.getPlaceNameAndAdress("restaurant", "restaurang");
+        String attractionInfo = places.getPlaceNameAndAdress("tourist_attraction", "Sevärdheter");
+        System.out.println(restaurantInfo + " "+ attractionInfo);
 
         routeInfo.getPolyline();
 

@@ -48,7 +48,7 @@ public class RouteInfo { // använder Google maps Distance API
     }
 
 
-    public String getRouteTimeDist() {
+    public String getRouteTimeAndDist() {
 
         JsonObject responseJObj = JsonParser.parseString(jSonRoute).getAsJsonObject();  //converts Json String answer to JsonObject
 
