@@ -1,114 +1,171 @@
 let map, marker, userCoords = null;
+let geocoder, infoWindow;
 
-/* Called by Google Maps API */
 function initMap() {
-    const defaultLocation = { lat: 41.9028, lng: 12.4964 }; // Rome
-
+    // Default to Rome if geolocation fails
+    const defaultLocation = { lat: 41.9028, lng: 12.4964 };
+    
     map = new google.maps.Map(document.getElementById("map"), {
         center: defaultLocation,
         zoom: 6,
-        mapId: "bf198408fe296ef1"
+        mapId: "tripcompass_map",
+        streetViewControl: false,
+        fullscreenControl: false,
+        mapTypeControlOptions: {
+            mapTypeIds: ["roadmap", "hybrid"]
+        }
     });
-
-    // Geolocalizza utente al load
+    
+    geocoder = new google.maps.Geocoder();
+    infoWindow = new google.maps.InfoWindow();
+    
+    // Initialize autocomplete
+    initAutocomplete();
+    
+    // Try to get user's location
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-            (position) => {
+            position => {
                 userCoords = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
                 };
-                console.log("User location:", userCoords);
                 map.setCenter(userCoords);
-                map.setZoom(10);
-
+                map.setZoom(12);
+                
+                // Add user location marker
                 new google.maps.Marker({
                     position: userCoords,
                     map: map,
                     title: "You are here!",
                     icon: {
                         path: google.maps.SymbolPath.CIRCLE,
-                        scale: 8,
+                        scale: 10,
                         fillColor: "#4285F4",
                         fillOpacity: 1,
                         strokeWeight: 2,
                         strokeColor: "#fff"
                     }
-                })
+                });
             },
-            () => alert("Geolocation failed.")
+            error => {
+                console.warn("Geolocation failed:", error.message);
+                // Set today's date in the date input
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('checkin-input').value = today;
+            }
         );
+    } else {
+        console.warn("Geolocation not supported");
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('checkin-input').value = today;
     }
-
-    // Click sulla mappa = destinazione
-    map.addListener("click", (e) => {
-        if (!userCoords) {
-            alert("User location not available yet.");
-            return;
-        }
-        requestTripInfo(e.latLng.lat(), e.latLng.lng());
+    
+    // Handle map clicks
+    map.addListener("click", event => {
+        requestTripInfo(event.latLng.lat(), event.latLng.lng());
     });
 }
 
+function initAutocomplete() {
+    const cityInput = document.getElementById("city-input");
+    if (cityInput) {
+        new google.maps.places.Autocomplete(cityInput, {
+            types: ["(cities)"],
+            fields: ["geometry", "name"]
+        });
+    }
+}
+
 function requestTripInfo(destLat, destLng) {
+    // Clear previous marker
     if (marker) marker.setMap(null);
-    marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
-
-    const checkInDate = document.getElementById("checkin-input").value || "2025-06-03";
-    const adults = 1;
-    const roomQuantity = 1;
-
+    
+    // Add temporary marker
+    const tempMarker = new google.maps.Marker({
+        position: { lat: destLat, lng: destLng },
+        map: map,
+        title: "Selected destination",
+        icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 12,
+            fillColor: "#EA4335",
+            fillOpacity: 1,
+            strokeWeight: 3,
+            strokeColor: "#fff"
+        },
+        zIndex: 999
+    });
+    
+    // Get form values
+    const checkInDate = document.getElementById("checkin-input").value;
+    const adults = document.getElementById("adults-input").value || "1";
+    const rooms = document.getElementById("rooms-input").value || "1";
     const originText = document.getElementById("origin-input").value.trim();
-
-    let url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
-
+    
+    // Validate inputs
+    if (!checkInDate) {
+        alert("Please select a check-in date");
+        tempMarker.setMap(null);
+        return;
+    }
+    
+    // Build API URL
+    let url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${rooms}`;
+    
     if (originText) {
         url += `&origin=${encodeURIComponent(originText)}`;
     } else if (userCoords) {
         url += `&originLat=${userCoords.lat}&originLng=${userCoords.lng}`;
     } else {
-        alert("Utent position not available and no origin insert!");
+        alert("Please enter an origin or enable location services");
+        tempMarker.setMap(null);
         return;
     }
-    fetch(`/nearby-airports?lat=${userCoords.lat}&lng=${userCoords.lng}&limit=5`)
-        .then(res => res.json())
-        .then(airports => {
-            airports.forEach(airport => {
-                // Aggiungi un marker per ogni aeroporto
-                const marker = new google.maps.Marker({
-                    position: { lat: airport.lat, lng: airport.lng },
-                    map: map,
-                    icon: "airport_icon.png", // icona diversa per gli aeroporti
-                    title: airport.name + " (" + airport.iata + ")"
-                });
-
-                marker.addListener("click", () => {
-                    // Quando clicchi l'aeroporto, imposta l'origine nel form
-                    document.getElementById('origin-input').value = airport.iata;
-                    // Optionale: apri info window
-                    infoWindow.setContent(`<strong>${airport.name}</strong> (${airport.iata})`);
-                    infoWindow.open(map, marker);
-                });
-            });
-        });
-
+    
+    // Show loading indicator
+    document.getElementById('loading-indicator').classList.remove('hidden');
+    document.querySelector('#search-btn .spinner').classList.remove('hidden');
+    document.querySelector('#search-btn span').textContent = 'Searching...';
+    
+    // Fetch trip info
     fetch(url)
-        .then(async res => {
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.message || "Unknown error");
+        .then(async response => {
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || "Unknown error occurred");
             }
-            return res.json();
+            return response.json();
         })
-        // In map.js
         .then(data => {
-            console.log("Data received from backend:", data);
             renderSidebar(data);
             showSidebar();
+            tempMarker.setMap(null);
+            
+            // Add final marker
+            marker = new google.maps.Marker({
+                position: { lat: destLat, lng: destLng },
+                map: map,
+                title: "Destination",
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 12,
+                    fillColor: "#34A853",
+                    fillOpacity: 1,
+                    strokeWeight: 3,
+                    strokeColor: "#fff"
+                },
+                zIndex: 1000
+            });
         })
-        .catch(err => {
-            console.error("Trip info fetch failed:", err.message);
-            alert("Oops! " + err.message);
+        .catch(error => {
+            console.error("Trip info error:", error.message);
+            alert(`Error: ${error.message}`);
             hideSidebar();
+        })
+        .finally(() => {
+            document.getElementById('loading-indicator').classList.add('hidden');
+            document.querySelector('#search-btn .spinner').classList.add('hidden');
+            document.querySelector('#search-btn span').textContent = 'Search';
         });
 }
