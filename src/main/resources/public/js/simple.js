@@ -1,5 +1,4 @@
-function initSimpleMap() {
-    // Rome 
+function initSimpleMap() { 
     const defaultLocation = { lat: 41.9028, lng: 12.4964 }; // Rome
     const map = new google.maps.Map(document.getElementById('simple-map'), {
         center: defaultLocation,
