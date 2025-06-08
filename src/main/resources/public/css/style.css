@@ -51,3 +51,9 @@ body, html {
     border: 1px solid #ddd;
     border-radius: 5px;
 }
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
