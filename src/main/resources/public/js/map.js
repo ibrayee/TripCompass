@@ -142,7 +142,6 @@ function requestTripInfo(destLat, destLng) {
             showSidebar();
             tempMarker.setMap(null);
             
-            // Add final marker
             marker = new google.maps.Marker({
                 position: { lat: destLat, lng: destLng },
                 map: map,
