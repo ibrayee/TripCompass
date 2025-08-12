@@ -1,18 +1,14 @@
 package org.example;
 
-import com.amadeus.resources.Location;
 import com.amadeus.Amadeus;
 import com.amadeus.Params;
 import com.amadeus.exceptions.ResponseException;
+import com.amadeus.resources.Location;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.HashMap;
+
+import java.util.*;
 
 public class AmadeusService {
     private static final Logger logger = LoggerFactory.getLogger(AmadeusService.class);
@@ -145,6 +141,32 @@ public class AmadeusService {
         }
         return null;
     }
+
+    public List<Map<String, Object>> searchLocations(String keyword) throws ResponseException {
+        List<Map<String, Object>> suggestions = new ArrayList<>();
+        Params params = Params.with("keyword", keyword)
+                .and("subType", "AIRPORT,CITY")
+                .and("page[limit]", 5);
+        Location[] results = amadeus.referenceData.locations.get(params);
+        if (results != null) {
+            for (Location loc : results) {
+                Map<String, Object> info = new HashMap<>();
+                if (loc.getName() != null) {
+                    info.put("name", loc.getName());
+                }
+                if (loc.getIataCode() != null) {
+                    info.put("iataCode", loc.getIataCode());
+                }
+                if (loc.getGeoCode() != null) {
+                    info.put("lat", loc.getGeoCode().getLatitude());
+                    info.put("lng", loc.getGeoCode().getLongitude());
+                }
+                suggestions.add(info);
+            }
+        }
+        return suggestions;
+    }
+
 
     public String findNearestAirportCode(double lat, double lng) {
         return findNearestAirportCode(lat, lng, 200);

@@ -1,10 +1,11 @@
 package org.example;
 
+import com.amadeus.exceptions.ResponseException;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.amadeus.exceptions.ResponseException;
+
 import java.util.*;
 
 /**

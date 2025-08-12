@@ -1,5 +1,6 @@
 package org.example;
 
+import com.amadeus.exceptions.ResponseException;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -7,7 +8,6 @@ import com.google.gson.JsonParser;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import com.amadeus.exceptions.ResponseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +69,7 @@ public class TripController {
         // Other endpoints kept as before
         app.get("/search/flights", TripController::handleFlightSearch);
         app.get("/search/nearby", TripController::handleNearbySearch);
+        app.get("/search/locations", TripController::handleLocationSearch);
 
         // New: delegate to TripInfoService
         app.get("/trip-info", TripController::handleTripInfo);
@@ -172,6 +173,28 @@ public class TripController {
             ));
         }
 
+    }
+
+    private static void handleLocationSearch(Context ctx) {
+        String keyword = ctx.queryParam("keyword");
+        if (keyword == null || keyword.isBlank()) {
+            ctx.status(400).json(Map.of("error", "Missing keyword"));
+            return;
+        }
+        try {
+            List<Map<String, Object>> locations = amadeusService.searchLocations(keyword);
+            ctx.json(locations);
+        } catch (ResponseException e) {
+            ctx.status(502).json(Map.of(
+                    "error", "Upstream service error",
+                    "details", e.getMessage()
+            ));
+        } catch (Exception e) {
+            ctx.status(500).json(Map.of(
+                    "error", "Internal Server Error",
+                    "message", e.getMessage()
+            ));
+        }
     }
 
     private static void handleFlightSearch(Context ctx) {
@@ -323,6 +346,25 @@ public class TripController {
 
             List<Map<String, Object>> airports =
                     amadeusService.getNearbyAirportDetails(lat, lng, radius, limit);
+            if (airports.isEmpty()) {
+                String nearestCode = amadeusService.findNearestAirportCode(lat, lng, radius);
+                if (nearestCode != null) {
+                    List<Map<String, Object>> fallback =
+                            amadeusService.getNearbyAirportDetails(lat, lng, 1000, 1);
+                    if (!fallback.isEmpty()) {
+                        ctx.json(fallback);
+                    } else {
+                        ctx.json(List.of(Map.of("iata", nearestCode)));
+                    }
+                    return;
+                }
+
+                ctx.status(404).json(
+                        Map.of("error", "Dataset di test limitato a US/ES/UK/DE/IN")
+                );
+                return;
+            }
+
             ctx.json(airports);
         } catch (ResponseException e) {
             ctx.status(502).json(Map.of("error", "Upstream service error"));

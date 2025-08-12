@@ -68,8 +68,7 @@ function requestTripInfo(destLat, destLng, originLat, originLng) {
     marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
     airportMarkers.forEach(m => m.setMap(null));
     airportMarkers = [];
-    airportMarkers.forEach(m => m.setMap(null));
-    airportMarkers = [];
+
 
     const checkInInput = document.getElementById("checkin-input");
     const checkInDate = checkInInput && checkInInput.value
@@ -141,7 +140,11 @@ function requestTripInfo(destLat, destLng, originLat, originLng) {
             })
             .catch(err => {
                 console.error(err);
-                alert("Oops! " + err.message);
+                if (err.message === 'No airports found within selected radius') {
+                    alert("No airport found. Tests only in US/ES/UK/DE/IN. More info: https://example.com/dataset-coverage");
+                } else {
+                    alert("Oops! " + err.message);
+                }
                 hideSidebar();
             });
         return;
