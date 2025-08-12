@@ -19,6 +19,10 @@ public class ValidationUtils {
     }
 
     public static boolean isFutureDate(String dateStr) {
+        if (dateStr == null) {
+            logger.warn("Date string is null");
+            return false;
+        }
         try {
             LocalDate date = LocalDate.parse(dateStr);
             return date.isAfter(LocalDate.now());

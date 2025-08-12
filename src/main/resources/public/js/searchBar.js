@@ -14,11 +14,7 @@ destinationInput.addEventListener("input", () => {
                     li.addEventListener("click", () => {
                         suggestionsEl.innerHTML = "";
                         destinationInput.value = loc.name;
-                        if (userCoords) {
-                            requestTripInfo(loc.lat, loc.lng, userCoords.lat, userCoords.lng);
-                        } else {
-                            alert("User location not available.");
-                        }
+                        requestTripInfo(loc.lat, loc.lng);
                     });
                     suggestionsEl.appendChild(li);
                 });
@@ -36,11 +32,7 @@ function searchCity() {
         if (status === "OK") {
             const location = results[0].geometry.location;
             map.setCenter(location);
-            if (userCoords) {
-                requestTripInfo(location.lat(), location.lng(), userCoords.lat, userCoords.lng);
-            } else {
-                alert("User location not available.");
-            }
+            requestTripInfo(location.lat(), location.lng());
         } else {
             alert("City not found. Please try again.");
         }

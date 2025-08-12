@@ -2,6 +2,8 @@ let map, marker, userCoords = null;
 let currentMode = 'trip';
 let infoWindow;
 let airportMarkers = [];
+let originAddress = "";
+
 
 
 function setMode(mode) {
@@ -49,6 +51,14 @@ function initMap() {
                         strokeColor: "#fff"
                     }
                 })
+                const geocoder = new google.maps.Geocoder();
+                geocoder.geocode({ location: userCoords }, (results, status) => {
+                    if (status === "OK" && results[0]) {
+                        const originInput = document.getElementById("origin-input");
+                        originInput.value = results[0].formatted_address;
+                        originAddress = originInput.value;
+                    }
+                });
             },
             () => alert("Geolocation failed.")
         );
@@ -56,26 +66,50 @@ function initMap() {
 
     // Click sulla mappa = destinazione
     map.addListener("click", (e) => {
-        if (!userCoords) {
-            alert("User location not available yet.");
-            return;
-        }
-        requestTripInfo(e.latLng.lat(), e.latLng.lng(), userCoords.lat, userCoords.lng);    });
+        requestTripInfo(e.latLng.lat(), e.latLng.lng());
+    });
 }
 
-function requestTripInfo(destLat, destLng, originLat, originLng) {
-    if (marker) marker.setMap(null);
-    marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
-    airportMarkers.forEach(m => m.setMap(null));
-    airportMarkers = [];
+function requestTripInfo(destLat, destLng) {
+    const originInput = document.getElementById("origin-input");
+    const originValue = originInput ? originInput.value.trim() : "";
+
+    if (originValue && originValue !== originAddress) {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: originValue }, (results, status) => {
+            if (status === "OK" && results[0]) {
+                const loc = results[0].geometry.location;
+                userCoords = { lat: loc.lat(), lng: loc.lng() };
+                originAddress = originValue;
+                proceed();
+            } else {
+                alert("Origin not found.");
+            }
+        });
+        return;
+    }
+    if (!userCoords) {
+        alert("User location not available.");
+        return;
+    }
+
+    proceed();
+
+    function proceed() {
+        const originLat = userCoords.lat;
+        const originLng = userCoords.lng;
+        if (marker) marker.setMap(null);
+        marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
+        airportMarkers.forEach(m => m.setMap(null));
+        airportMarkers = [];
 
 
-    const checkInInput = document.getElementById("checkin-input");
-    const checkInDate = checkInInput && checkInInput.value
-        ? checkInInput.value
-        : new Date().toISOString().split('T')[0];
-    const adults = 1;
-    const roomQuantity = 1;
+        const checkInInput = document.getElementById("checkin-input");
+        const checkInDate = checkInInput && checkInInput.value
+            ? checkInInput.value
+            : new Date().toISOString().split('T')[0];
+        const adults = 1;
+        const roomQuantity = 1;
     if (currentMode === 'flights') {
         const radiusSelect = document.getElementById('radius-input');
         const radius = radiusSelect && radiusSelect.value ? radiusSelect.value : 200;
@@ -169,10 +203,6 @@ function requestTripInfo(destLat, destLng, originLat, originLng) {
         return;
     }
 
-    if (originLat == null || originLng == null) {
-        alert("User location not available.");
-    return;
-    }
     const url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}&originLat=${originLat}&originLng=${originLng}`;
 
     fetch(url)
@@ -193,4 +223,4 @@ function requestTripInfo(destLat, destLng, originLat, originLng) {
             alert("Oops! " + err.message);
             hideSidebar();
         });
-}
+}}
