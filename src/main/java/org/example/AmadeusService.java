@@ -33,11 +33,9 @@ public class AmadeusService {
         Params params = Params.with("latitude", latStr)
                 .and("longitude", lngStr)
                 .and("radius", 100)
-                .and("subType", "AIRPORT")
                 .and("page[limit]", 1);
 
-        Location[] locations = amadeus.referenceData.locations.get(params);
-
+        Location[] locations = amadeus.referenceData.locations.airports.get(params);
         if (locations != null && locations.length > 0) {
             return locations[0].getIataCode();
         } else {
@@ -55,12 +53,9 @@ public class AmadeusService {
         Params params = Params.with("latitude", latStr)
                 .and("longitude", lngStr)
                 .and("radius", radiusKm)
-                .and("radiusUnit", "KM")
-                .and("subType", "AIRPORT")
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.get(params);
-        if (results != null) {
+        Location[] results = amadeus.referenceData.locations.airports.get(params);        if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null) {
                     airportCodes.add(loc.getIataCode());
@@ -78,12 +73,9 @@ public class AmadeusService {
         Params params = Params.with("latitude", latStr)
                 .and("longitude", lngStr)
                 .and("radius", radiusKm)
-                .and("radiusUnit", "KM")
-                .and("subType", "AIRPORT")
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.get(params);
-        if (results != null) {
+        Location[] results = amadeus.referenceData.locations.airports.get(params);        if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null && loc.getGeoCode() != null) {
                     Map<String, Object> info = new HashMap<>();
