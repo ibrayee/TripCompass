@@ -68,19 +68,32 @@ function requestTripInfo(destLat, destLng, originLat, originLng) {
     marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
     airportMarkers.forEach(m => m.setMap(null));
     airportMarkers = [];
+    airportMarkers.forEach(m => m.setMap(null));
+    airportMarkers = [];
 
-    const checkInDate = document.getElementById("checkin-input").value || new Date().toISOString().split('T')[0];
+    const checkInInput = document.getElementById("checkin-input");
+    const checkInDate = checkInInput && checkInInput.value
+        ? checkInInput.value
+        : new Date().toISOString().split('T')[0];
     const adults = 1;
     const roomQuantity = 1;
     if (currentMode === 'flights') {
-        const radius = document.getElementById('radius-input').value || 200;
+        const radiusSelect = document.getElementById('radius-input');
+        const radius = radiusSelect && radiusSelect.value ? radiusSelect.value : 200;
         Promise.all([
-            fetch(`/nearby-airports?lat=${originLat}&lng=${originLng}&limit=5&radius=${radius}`).then(r => r.json()),
-            fetch(`/nearby-airports?lat=${destLat}&lng=${destLng}&limit=5&radius=${radius}`).then(r => r.json())
-        ])
+            fetch(`/nearby-airports?lat=${originLat}&lng=${originLng}&limit=5&radius=${radius}`).then(res => {
+                if (!res.ok) throw new Error('Airport lookup failed');
+                return res.json();
+            }),
+            fetch(`/nearby-airports?lat=${destLat}&lng=${destLng}&limit=5&radius=${radius}`).then(res => {
+                if (!res.ok) throw new Error('Airport lookup failed');
+                return res.json();
+            })])
             .then(([origAirports, destAirports]) => {
-                if (!origAirports.length || !destAirports.length) {
-                    throw new Error('No airports found within selected radius');
+                if (origAirports.error) throw new Error(origAirports.error);
+                if (destAirports.error) throw new Error(destAirports.error);
+                if (!Array.isArray(origAirports) || !Array.isArray(destAirports) ||
+                    !origAirports.length || !destAirports.length) {                    throw new Error('No airports found within selected radius');
                 }
 
                 origAirports.forEach(ap => {

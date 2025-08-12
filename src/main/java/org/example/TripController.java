@@ -302,25 +302,34 @@ public class TripController {
         if (limitStr != null && !limitStr.isEmpty()) {
             try {
                 limit = Integer.parseInt(limitStr);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+
+            }
         }
         int radius = 200; // default radius in km
         if (radiusStr != null && !radiusStr.isEmpty()) {
             try {
                 radius = Integer.parseInt(radiusStr);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+
+            }
         }
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
-            ctx.status(400).result("Invalid coordinates");
-            return;
+            ctx.status(400).json(Map.of("error", "Invalid coordinates"));            return;
         }
         try {
             double lat = Double.parseDouble(latStr);
             double lng = Double.parseDouble(lngStr);
 
-            List<Map<String, Object>> airports = amadeusService.getNearbyAirportDetails(lat, lng, radius, limit);            ctx.json(airports);
+            List<Map<String, Object>> airports =
+                    amadeusService.getNearbyAirportDetails(lat, lng, radius, limit);
+            ctx.json(airports);
+        } catch (ResponseException e) {
+            ctx.status(502).json(Map.of("error", "Upstream service error"));
         } catch (Exception e) {
-            ctx.status(500).result("Internal Server Error: " + e.getMessage());
+            ctx.status(500).json(
+                    Map.of("error", "Internal Server Error", "message", e.getMessage())
+            );
         }
     }
 }
