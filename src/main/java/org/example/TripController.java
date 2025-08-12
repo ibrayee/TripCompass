@@ -8,6 +8,8 @@ import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import com.amadeus.exceptions.ResponseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -25,6 +27,17 @@ public class TripController {
     private static final Dotenv dotenv = Dotenv.configure().load();
     private static final String AMADEUS_API_KEY = dotenv.get("AMADEUS_API_KEY");
     private static final String AMADEUS_API_SECRET = dotenv.get("AMADEUS_API_SECRET");
+    private static final String GOOGLE_MAPS_API_KEY = dotenv.get("GOOGLE_MAPS_API_KEY");
+
+    private static final Logger logger = LoggerFactory.getLogger(TripController.class);
+
+    static {
+        if (AMADEUS_API_KEY == null || AMADEUS_API_KEY.isBlank()
+                || AMADEUS_API_SECRET == null || AMADEUS_API_SECRET.isBlank()) {
+            logger.error("Amadeus API credentials are missing. Please set AMADEUS_API_KEY and AMADEUS_API_SECRET.");
+            throw new IllegalStateException("Missing Amadeus API credentials");
+        }
+    }
 
     // Service instances
     private static final AmadeusService amadeusService = new AmadeusService(
@@ -45,6 +58,13 @@ public class TripController {
 
         // Health check
         app.get("/hello", ctx -> ctx.result("Hello TripCompass!"));
+        app.get("/config/maps-key", ctx -> {
+            if (GOOGLE_MAPS_API_KEY == null || GOOGLE_MAPS_API_KEY.isBlank()) {
+                ctx.status(404).json(Map.of("error", "Google Maps API key not configured"));
+            } else {
+                ctx.json(Map.of("apiKey", GOOGLE_MAPS_API_KEY));
+            }
+        });
 
         // Other endpoints kept as before
         app.get("/search/flights", TripController::handleFlightSearch);
@@ -91,8 +111,8 @@ public class TripController {
         }
 
         try {
-            double lat = Double.parseDouble(originLatStr.trim().replace(",", "."));
-            double lng = Double.parseDouble(originLngStr.trim().replace(",", "."));
+            double lat = Double.parseDouble(latStr.trim().replace(",", "."));
+            double lng = Double.parseDouble(lngStr.trim().replace(",", "."));
             int adults = Integer.parseInt(adultsStr.trim());
             int rooms = Integer.parseInt(roomQuantityStr.trim());
 
@@ -276,8 +296,7 @@ public class TripController {
             double lat = Double.parseDouble(latStr);
             double lng = Double.parseDouble(lngStr);
 
-            List<String> airports = amadeusService.getNearbyAirports(lat, lng, 200, limit);
-            // Se vuoi info aggiuntive sugli aeroporti, puoi modificarlo per restituire oggetti con nome, IATA, lat, lng...
+            List<Map<String, Object>> airports = amadeusService.getNearbyAirportDetails(lat, lng, 200, limit);
             ctx.json(airports);
         } catch (Exception e) {
             ctx.status(500).result("Internal Server Error: " + e.getMessage());
