@@ -44,7 +44,6 @@ public class AmadeusService {
     }
 
 
-
     public List<String> getNearbyAirports(double lat, double lng, int radiusKm, int limit) throws ResponseException {
         List<String> airportCodes = new ArrayList<>();
         String latStr = String.format(Locale.US, "%.6f", lat);
@@ -55,7 +54,8 @@ public class AmadeusService {
                 .and("radius", radiusKm)
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.airports.get(params);        if (results != null) {
+        Location[] results = amadeus.referenceData.locations.airports.get(params);
+        if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null) {
                     airportCodes.add(loc.getIataCode());
@@ -75,7 +75,8 @@ public class AmadeusService {
                 .and("radius", radiusKm)
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.airports.get(params);        if (results != null) {
+        Location[] results = amadeus.referenceData.locations.airports.get(params);
+        if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null && loc.getGeoCode() != null) {
                     Map<String, Object> info = new HashMap<>();
@@ -133,39 +134,47 @@ public class AmadeusService {
 
             if (results != null && results.length > 0 && results[0].getGeoCode() != null) {
                 Location.GeoCode geo = results[0].getGeoCode();
-                logger.info("Geocoded {} to: {} , {}", cityName, geo.getLatitude(), geo.getLongitude());                return new double[]{geo.getLatitude(), geo.getLongitude()};
+                logger.info("Geocoded {} to: {} , {}", cityName, geo.getLatitude(), geo.getLongitude());
+                return new double[]{geo.getLatitude(), geo.getLongitude()};
             } else {
-                logger.warn("No geocode result for: {}", cityName);            }
+                logger.warn("No geocode result for: {}", cityName);
+            }
         } catch (Exception e) {
-            logger.error("Failed to geocode city: {}", cityName, e);            e.printStackTrace();
+            logger.error("Failed to geocode city: {}", cityName, e);
+            e.printStackTrace();
         }
         return null;
     }
 
     public String findNearestAirportCode(double lat, double lng) {
+        return findNearestAirportCode(lat, lng, 200);
+    }
+
+    public String findNearestAirportCode(double lat, double lng, int initialRadiusKm) {
         try {
             String latStr = String.format(Locale.US, "%.6f", lat);
             String lngStr = String.format(Locale.US, "%.6f", lng);
 
-            logger.debug("Find airport with lat={}, lng={}", latStr, lngStr);
-            Params params = Params.with("latitude", latStr)
-                    .and("longitude", lngStr)
-                    .and("radius", 200)
-                    .and("page[limit]", 1);
+            int radius = initialRadiusKm;
+            final int maxRadius = 1000;
+            while (radius <= maxRadius) {
+                logger.debug("Find airport with lat={}, lng={}, radius={}", latStr, lngStr, radius);
+                Params params = Params.with("latitude", latStr)
+                        .and("longitude", lngStr)
+                        .and("radius", radius)
+                        .and("page[limit]", 1);
 
-            Location[] locations = amadeus.referenceData.locations.airports.get(params);
-            logger.debug("Locations result: {}", Arrays.toString(locations));        if (locations != null && locations.length > 0) {
-                return locations[0].getIataCode();
+                Location[] locations = amadeus.referenceData.locations.airports.get(params);
+                logger.debug("Locations result for radius {}: {}", radius, Arrays.toString(locations));
+                if (locations != null && locations.length > 0) {
+                    return locations[0].getIataCode();
+                }
+                radius *= 2;
             }
-            throw new IllegalArgumentException("No nearby airport found for your location");
         } catch (Exception e) {
             logger.error("Failed to get nearest airport", e);
-            throw new RuntimeException("Failed to get nearest airport: " + e.getMessage());
         }
-
+        return null;
     }
 
-
-
 }
-

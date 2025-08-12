@@ -116,23 +116,38 @@ public class TripController {
             int adults = Integer.parseInt(adultsStr.trim());
             int rooms = Integer.parseInt(roomQuantityStr.trim());
 
+            double oLat = 0;
+            double oLng = 0;
+            if (hasOriginCoords) {
+                oLat = Double.parseDouble(originLatStr.trim().replace(",", "."));
+                oLng = Double.parseDouble(originLngStr.trim().replace(",", "."));
+            }
+
             String resolvedOrigin = null;
             if (hasOrigin) {
                 resolvedOrigin = origin.trim();
             } else if (hasOriginCoords) {
-                double oLat = Double.parseDouble(originLatStr.trim());
-                double oLng = Double.parseDouble(originLngStr.trim());
                 resolvedOrigin = amadeusService.findNearestAirportCode(oLat, oLng);
+            }
+
+            if (resolvedOrigin == null || resolvedOrigin.isEmpty()) {
+                ctx.status(404).json(Map.of(
+                        "error", "No airport close to you"
+                ));
+                return;
             }
             System.out.println("Origin used for airport search: " + resolvedOrigin);
 
-            if (resolvedOrigin == null || resolvedOrigin.isEmpty()) {
-                throw new IllegalArgumentException("Could not resolve origin airport");
+            Map<String, Object> result;
+            if (hasOriginCoords) {
+                result = tripInfoService.getTripInfo(
+                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, adults, rooms
+                );
+            } else {
+                result = tripInfoService.getTripInfo(
+                        lat, lng, resolvedOrigin, checkInDate, adults, rooms
+                );
             }
-
-            Map<String, Object> result = tripInfoService.getTripInfo(
-                    lat, lng, resolvedOrigin, checkInDate, adults, rooms
-            );
 
             ctx.contentType("application/json");
             ctx.json(result);
@@ -282,10 +297,17 @@ public class TripController {
         String latStr = ctx.queryParam("lat");
         String lngStr = ctx.queryParam("lng");
         String limitStr = ctx.queryParam("limit");
+        String radiusStr = ctx.queryParam("radius");
         int limit = 5; // default
         if (limitStr != null && !limitStr.isEmpty()) {
             try {
                 limit = Integer.parseInt(limitStr);
+            } catch (NumberFormatException ignored) {}
+        }
+        int radius = 200; // default radius in km
+        if (radiusStr != null && !radiusStr.isEmpty()) {
+            try {
+                radius = Integer.parseInt(radiusStr);
             } catch (NumberFormatException ignored) {}
         }
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
@@ -296,8 +318,7 @@ public class TripController {
             double lat = Double.parseDouble(latStr);
             double lng = Double.parseDouble(lngStr);
 
-            List<Map<String, Object>> airports = amadeusService.getNearbyAirportDetails(lat, lng, 200, limit);
-            ctx.json(airports);
+            List<Map<String, Object>> airports = amadeusService.getNearbyAirportDetails(lat, lng, radius, limit);            ctx.json(airports);
         } catch (Exception e) {
             ctx.status(500).result("Internal Server Error: " + e.getMessage());
         }

@@ -10,10 +10,18 @@
 <body>
 
 <header id="top-bar">
-    <input type="text" id="city-input" placeholder="Search city..." />
-    <input type="text" id="origin-input" placeholder="Origin (e.g. ARN)" />
-    <input type="text" id="destination-input" placeholder="Destination (e.g. FCO)" />
+    <div id="mode-buttons">
+        <button id="mode-flights" class="mode-btn" title="Flights">✈️</button>
+        <button id="mode-hotels" class="mode-btn" title="Hotels">🛏️</button>
+        <button id="mode-trip" class="mode-btn active" title="Flights + Hotels">✈️🛏️</button>
+    </div>
+    <input type="text" id="destination-input" placeholder="Enter destination..." />
     <input type="date" id="checkin-input" />
+    <select id="radius-input">
+        <option value="50">50 km</option>
+        <option value="100">100 km</option>
+        <option value="200" selected>200 km</option>
+    </select>
     <button id="search-btn" onclick="searchCity()">Search</button>
 </header>
 

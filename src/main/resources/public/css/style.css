@@ -19,6 +19,25 @@ body, html {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     z-index: 1000;
 }
+#mode-buttons {
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.mode-btn {
+    background: #fff;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+
+.mode-btn.active {
+    background: #4285F4;
+    color: #fff;
+}
+
 #top-bar input,
 #top-bar button {
     padding: 0.4rem 0.6rem;

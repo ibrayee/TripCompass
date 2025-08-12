@@ -1,5 +1,16 @@
 let map, marker, userCoords = null;
+let currentMode = 'trip';
+let infoWindow;
 
+function setMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`mode-${mode}`).classList.add('active');
+}
+
+document.getElementById('mode-flights').addEventListener('click', () => setMode('flights'));
+document.getElementById('mode-hotels').addEventListener('click', () => setMode('hotels'));
+document.getElementById('mode-trip').addEventListener('click', () => setMode('trip'));
 /* Called by Google Maps API */
 function initMap() {
     const defaultLocation = { lat: 41.9028, lng: 12.4964 }; // Rome
@@ -9,6 +20,7 @@ function initMap() {
         zoom: 6,
         mapId: "bf198408fe296ef1"
     });
+    infoWindow = new google.maps.InfoWindow();
 
     // Geolocalizza utente al load
     if (navigator.geolocation) {
@@ -46,39 +58,49 @@ function initMap() {
             alert("User location not available yet.");
             return;
         }
-        requestTripInfo(e.latLng.lat(), e.latLng.lng());
-    });
+        requestTripInfo(e.latLng.lat(), e.latLng.lng(), userCoords.lat, userCoords.lng);    });
 }
 
-function requestTripInfo(destLat, destLng) {
-    if (marker) marker.setMap(null);
+function requestTripInfo(destLat, destLng, originLat, originLng) {    if (marker) marker.setMap(null);
     marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
 
-    const checkInDate = document.getElementById("checkin-input").value || "2025-06-03";
+    const checkInDate = document.getElementById("checkin-input").value || new Date().toISOString().split('T')[0];
     const adults = 1;
     const roomQuantity = 1;
-
-    const originText = document.getElementById("origin-input").value.trim();
-
-    let url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
-
-    if (originText) {
-        url += `&origin=${encodeURIComponent(originText)}`;
-    } else if (userCoords) {
-        url += `&originLat=${userCoords.lat}&originLng=${userCoords.lng}`;
-    } else {
-        alert("Utent position not available and no origin insert!");
+    if (currentMode === 'flights') {
+        const origin = document.getElementById("origin-input").value.trim();
+        const destination = document.getElementById("destination-input").value.trim();
+        if (!origin || !destination) {
+            alert("Please enter origin and destination IATA codes.");
+            return;
+        }
+        const url = `/search/flights?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&departureDate=${checkInDate}&adults=${adults}`;
+        fetch(url)
+            .then(res => {
+                if (!res.ok) throw new Error('Flight search failed');
+                return res.json();
+            })
+            .then(data => {
+                renderSidebar({ flights: data }, currentMode);
+                showSidebar();
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Oops! " + err.message);
+                hideSidebar();
+            });
         return;
     }
     function fetchNearbyAirports(lat, lng) {
-        fetch(`/nearby-airports?lat=${lat}&lng=${lng}&limit=5`)
-            .then(res => res.json())
+        const radiusEl = document.getElementById('radius-input');
+        const radius = radiusEl ? radiusEl.value : 200;
+        fetch(`/nearby-airports?lat=${lat}&lng=${lng}&limit=5&radius=${radius}`)            .then(res => res.json())
             .then(airports => {
                 airports.forEach(airport => {
                     const marker = new google.maps.Marker({
                         position: { lat: airport.lat, lng: airport.lng },
                         map: map,
-                        icon: "airport_icon.png", // icona diversa per gli aeroporti
+                        icon: "airport_icon.png",
                         title: airport.name + " (" + airport.iata + ")"
                     });
 
@@ -90,33 +112,42 @@ function requestTripInfo(destLat, destLng) {
                 });
             });
     }
-
-    if (userCoords) {
-        fetchNearbyAirports(userCoords.lat, userCoords.lng);
-    } else if (originText) {
-        const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ address: originText }, (results, status) => {
-            if (status === "OK" && results[0]) {
-                const loc = results[0].geometry.location;
-                fetchNearbyAirports(loc.lat(), loc.lng());
-            } else {
-                console.warn("Could not geocode origin, skipping nearby airport fetch.");
-            }
-        });
+    if (currentMode === 'hotels') {
+        const url = `/search/nearby?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
+        fetch(url)
+            .then(res => {
+                if (!res.ok) throw new Error('Hotel search failed');
+                return res.json();
+            })
+            .then(data => {
+                renderSidebar({ hotels: data.offers || [] }, currentMode);
+                showSidebar();
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Oops! " + err.message);
+                hideSidebar();
+            });
+        return;
     }
+
+    if (originLat == null || originLng == null) {
+        alert("User location not available.");
+    return;
+    }
+    const url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}&originLat=${originLat}&originLng=${originLng}`;
 
     fetch(url)
         .then(async res => {
             if (!res.ok) {
                 const error = await res.json();
-                throw new Error(error.message || "Unknown error");
-            }
+                const msg = error.error || error.message || "Unknown error";
+                throw new Error(msg);            }
             return res.json();
         })
-        // In map.js
         .then(data => {
             console.log("Data received from backend:", data);
-            renderSidebar(data);
+            renderSidebar(data, currentMode);
             showSidebar();
         })
         .catch(err => {
