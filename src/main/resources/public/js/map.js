@@ -70,27 +70,40 @@ function requestTripInfo(destLat, destLng) {
         alert("Utent position not available and no origin insert!");
         return;
     }
-    fetch(`/nearby-airports?lat=${userCoords.lat}&lng=${userCoords.lng}&limit=5`)
-        .then(res => res.json())
-        .then(airports => {
-            airports.forEach(airport => {
-                // Aggiungi un marker per ogni aeroporto
-                const marker = new google.maps.Marker({
-                    position: { lat: airport.lat, lng: airport.lng },
-                    map: map,
-                    icon: "airport_icon.png", // icona diversa per gli aeroporti
-                    title: airport.name + " (" + airport.iata + ")"
-                });
+    function fetchNearbyAirports(lat, lng) {
+        fetch(`/nearby-airports?lat=${lat}&lng=${lng}&limit=5`)
+            .then(res => res.json())
+            .then(airports => {
+                airports.forEach(airport => {
+                    const marker = new google.maps.Marker({
+                        position: { lat: airport.lat, lng: airport.lng },
+                        map: map,
+                        icon: "airport_icon.png", // icona diversa per gli aeroporti
+                        title: airport.name + " (" + airport.iata + ")"
+                    });
 
-                marker.addListener("click", () => {
-                    // Quando clicchi l'aeroporto, imposta l'origine nel form
-                    document.getElementById('origin-input').value = airport.iata;
-                    // Optionale: apri info window
-                    infoWindow.setContent(`<strong>${airport.name}</strong> (${airport.iata})`);
-                    infoWindow.open(map, marker);
+                    marker.addListener("click", () => {
+                        document.getElementById('origin-input').value = airport.iata;
+                        infoWindow.setContent(`<strong>${airport.name}</strong> (${airport.iata})`);
+                        infoWindow.open(map, marker);
+                    });
                 });
             });
+    }
+
+    if (userCoords) {
+        fetchNearbyAirports(userCoords.lat, userCoords.lng);
+    } else if (originText) {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: originText }, (results, status) => {
+            if (status === "OK" && results[0]) {
+                const loc = results[0].geometry.location;
+                fetchNearbyAirports(loc.lat(), loc.lng());
+            } else {
+                console.warn("Could not geocode origin, skipping nearby airport fetch.");
+            }
         });
+    }
 
     fetch(url)
         .then(async res => {
