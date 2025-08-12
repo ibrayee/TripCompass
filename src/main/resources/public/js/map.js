@@ -1,6 +1,8 @@
 let map, marker, userCoords = null;
 let currentMode = 'trip';
 let infoWindow;
+let airportMarkers = [];
+
 
 function setMode(mode) {
     currentMode = mode;
@@ -61,24 +63,64 @@ function initMap() {
         requestTripInfo(e.latLng.lat(), e.latLng.lng(), userCoords.lat, userCoords.lng);    });
 }
 
-function requestTripInfo(destLat, destLng, originLat, originLng) {    if (marker) marker.setMap(null);
+function requestTripInfo(destLat, destLng, originLat, originLng) {
+    if (marker) marker.setMap(null);
     marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
+    airportMarkers.forEach(m => m.setMap(null));
+    airportMarkers = [];
 
     const checkInDate = document.getElementById("checkin-input").value || new Date().toISOString().split('T')[0];
     const adults = 1;
     const roomQuantity = 1;
     if (currentMode === 'flights') {
-        const origin = document.getElementById("origin-input").value.trim();
-        const destination = document.getElementById("destination-input").value.trim();
-        if (!origin || !destination) {
-            alert("Please enter origin and destination IATA codes.");
-            return;
-        }
-        const url = `/search/flights?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&departureDate=${checkInDate}&adults=${adults}`;
-        fetch(url)
-            .then(res => {
-                if (!res.ok) throw new Error('Flight search failed');
-                return res.json();
+        const radius = document.getElementById('radius-input').value || 200;
+        Promise.all([
+            fetch(`/nearby-airports?lat=${originLat}&lng=${originLng}&limit=5&radius=${radius}`).then(r => r.json()),
+            fetch(`/nearby-airports?lat=${destLat}&lng=${destLng}&limit=5&radius=${radius}`).then(r => r.json())
+        ])
+            .then(([origAirports, destAirports]) => {
+                if (!origAirports.length || !destAirports.length) {
+                    throw new Error('No airports found within selected radius');
+                }
+
+                origAirports.forEach(ap => {
+                    const m = new google.maps.Marker({
+                        position: { lat: ap.lat, lng: ap.lng },
+                        map: map,
+                        label: ap.iata,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 6,
+                            fillColor: '#4285F4',
+                            fillOpacity: 1,
+                            strokeWeight: 1
+                        }
+                    });
+                    airportMarkers.push(m);
+                });
+                destAirports.forEach(ap => {
+                    const m = new google.maps.Marker({
+                        position: { lat: ap.lat, lng: ap.lng },
+                        map: map,
+                        label: ap.iata,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 6,
+                            fillColor: '#DB4437',
+                            fillOpacity: 1,
+                            strokeWeight: 1
+                        }
+                    });
+                    airportMarkers.push(m);
+                });
+
+                const origin = origAirports[0].iata;
+                const destination = destAirports[0].iata;
+                const url = `/search/flights?origin=${origin}&destination=${destination}&departureDate=${checkInDate}&adults=${adults}`;
+                return fetch(url).then(res => {
+                    if (!res.ok) throw new Error('Flight search failed');
+                    return res.json();
+                });
             })
             .then(data => {
                 renderSidebar({ flights: data }, currentMode);
@@ -91,27 +133,7 @@ function requestTripInfo(destLat, destLng, originLat, originLng) {    if (marker
             });
         return;
     }
-    function fetchNearbyAirports(lat, lng) {
-        const radiusEl = document.getElementById('radius-input');
-        const radius = radiusEl ? radiusEl.value : 200;
-        fetch(`/nearby-airports?lat=${lat}&lng=${lng}&limit=5&radius=${radius}`)            .then(res => res.json())
-            .then(airports => {
-                airports.forEach(airport => {
-                    const marker = new google.maps.Marker({
-                        position: { lat: airport.lat, lng: airport.lng },
-                        map: map,
-                        icon: "airport_icon.png",
-                        title: airport.name + " (" + airport.iata + ")"
-                    });
 
-                    marker.addListener("click", () => {
-                        document.getElementById('origin-input').value = airport.iata;
-                        infoWindow.setContent(`<strong>${airport.name}</strong> (${airport.iata})`);
-                        infoWindow.open(map, marker);
-                    });
-                });
-            });
-    }
     if (currentMode === 'hotels') {
         const url = `/search/nearby?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
         fetch(url)
