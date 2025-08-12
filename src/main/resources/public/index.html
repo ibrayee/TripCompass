@@ -1,30 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TripCompass</title>
     <link rel="stylesheet" href="css/style.css" />
     <link rel="icon" href="css/favicon.png" type="image/png" />
 </head>
 <body>
 
-<!-- Barra di ricerca -->
-<div id="search-bar">
+<header id="top-bar">
     <input type="text" id="city-input" placeholder="Search city..." />
     <input type="text" id="origin-input" placeholder="Origin (e.g. ARN)" />
     <input type="text" id="destination-input" placeholder="Destination (e.g. FCO)" />
     <input type="date" id="checkin-input" />
-    <button onclick="searchCity()">Search</button>
-</div>
+    <button id="search-btn" onclick="searchCity()">Search</button>
+</header>
 
+<main id="app">
 
-<!-- Mappa -->
-<div id="map"></div>
+    <div id="map"></div>
 
-<!-- Sidebar nascosta di default -->
-<div id="sidebar" class="hidden">
-    <div id="results"></div>
-</div>
+       <!-- Sidebar nascosta di default -->
+        <aside id="sidebar" class="hidden">
+            <div id="results"></div>
+        </aside>
+    </main>
 
 <!-- Script -->
 <script src="js/searchBar.js"></script>
