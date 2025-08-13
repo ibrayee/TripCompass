@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,13 +8,22 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/flights.css">
 </head>
+
 <body>
+    <nav>
+        <div class="icon">TripCompass</div>
+        <ul class="navitem">
+            <li class="länk"><a href="index.html">Start</a></li>
+            <li class="länk"><a href="flights.html">Flights</a></li>
+            <li class="länk"><a href="hotels.html">Hotels</a></li>
+        </ul>
+    </nav>
     <div class="container">
         <header class="page-header">
             <h1>✈️ Flight Search</h1>
             <p>Find the best flights for your journey</p>
         </header>
-        
+
         <div class="search-card">
             <form id="flightForm">
                 <div class="form-grid">
@@ -34,14 +44,14 @@
                         <input type="number" id="adults" min="1" value="1" required>
                     </div>
                 </div>
-                
+
                 <button type="submit" class="btn-primary" id="flight-search-btn">
                     <span>Search Flights</span>
                     <div class="spinner hidden"></div>
                 </button>
             </form>
         </div>
-        
+
         <div class="results-container">
             <h2 class="results-header">Available Flights</h2>
             <div id="results"></div>
@@ -50,4 +60,5 @@
 
     <script src="js/flights.js"></script>
 </body>
+
 </html>
