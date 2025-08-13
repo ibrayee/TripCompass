@@ -86,6 +86,11 @@ img {
   animation: spin 1s linear infinite;
 }
 
+.navitem{
+  align-items: center;
+  display: flex;
+  gap:2rem;
+}
 
 @media (max-width: 768px) {
   #search-bar {
