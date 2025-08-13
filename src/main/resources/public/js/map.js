@@ -54,9 +54,9 @@ function initMap() {
                 const geocoder = new google.maps.Geocoder();
                 geocoder.geocode({ location: userCoords }, (results, status) => {
                     if (status === "OK" && results[0]) {
-                        const originInput = document.getElementById("origin-input");
-                        originInput.value = results[0].formatted_address;
-                        originAddress = originInput.value;
+                        const departureInput = document.getElementById("departure-input");
+                        departureInput.value = results[0].formatted_address;
+                        originAddress = departureInput.value;
                     }
                 });
             },
@@ -66,13 +66,48 @@ function initMap() {
 
     // Click sulla mappa = destinazione
     map.addListener("click", (e) => {
-        requestTripInfo(e.latLng.lat(), e.latLng.lng());
-    });
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ location: { lat, lng } }, async (results, status) => {
+            if (status === "OK" && results[0]) {
+                const departureInput = document.getElementById("departure-input");
+                if (departureInput) {
+                    departureInput.value = results[0].formatted_address;
+                }
+                userCoords = { lat, lng };
+
+                const radiusSelect = document.getElementById('radius-input');
+                let radius = radiusSelect && radiusSelect.value ? Number(radiusSelect.value) : 200;
+                let airports = [];
+                const maxRadius = 5000;
+                while (radius <= maxRadius) {
+                    try {
+                        const res = await fetch(`/nearby-airports?lat=${lat}&lng=${lng}&limit=1&radius=${radius}`);
+                        if (!res.ok) throw new Error('Airport lookup failed');
+                        airports = await res.json();
+                        if (Array.isArray(airports) && airports.length > 0 && !airports.error) {
+                            break;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        break;
+                    }
+                    radius *= 2;
+                }
+
+                if (departureInput && departureInput.value.trim() && typeof destinationCoords !== "undefined" && destinationCoords) {
+                    requestTripInfo(destinationCoords.lat, destinationCoords.lng);
+                }
+            } else {
+                alert("Location not found.");
+            }
+        });    });
 }
 
 function requestTripInfo(destLat, destLng) {
-    const originInput = document.getElementById("origin-input");
-    const originValue = originInput ? originInput.value.trim() : "";
+    const departureInput = document.getElementById("departure-input");
+    const originValue = departureInput ? departureInput.value.trim() : "";
 
     if (originValue && originValue !== originAddress) {
         const geocoder = new google.maps.Geocoder();
@@ -80,7 +115,8 @@ function requestTripInfo(destLat, destLng) {
             if (status === "OK" && results[0]) {
                 const loc = results[0].geometry.location;
                 userCoords = { lat: loc.lat(), lng: loc.lng() };
-                originAddress = originValue;
+                departureInput.value = results[0].formatted_address;
+                originAddress = departureInput.value;
                 proceed();
             } else {
                 alert("Origin not found.");
@@ -223,4 +259,5 @@ function requestTripInfo(destLat, destLng) {
             alert("Oops! " + err.message);
             hideSidebar();
         });
-}}
+}
+}

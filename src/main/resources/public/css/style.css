@@ -89,25 +89,22 @@ body, html {
     border-radius: 5px;
 }
 
-#suggestions {
+.suggestions {
     position: absolute;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
+
     list-style: none;
     margin: 0;
     padding: 0;
     background: #fff;
     border: 1px solid #ccc;
-    width: 200px;
     z-index: 1001;
 }
 
-#suggestions li {
+.suggestions li {
     padding: 0.4rem;
     cursor: pointer;
 }
 
-#suggestions li:hover {
+.suggestions li:hover {
     background: #f0f0f0;
 }
