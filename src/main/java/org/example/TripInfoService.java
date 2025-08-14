@@ -1,5 +1,6 @@
 package org.example;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -78,9 +79,10 @@ public class TripInfoService {
             String hotelId = hotelObj.get("hotelId").getAsString();
             try {
                 String offersJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms);
+                Object offers = new Gson().fromJson(offersJson, Object.class);
                 Map<String, Object> hotelData = new HashMap<>();
                 hotelData.put("hotelId", hotelId);
-                hotelData.put("offers", JsonParser.parseString(offersJson));
+                hotelData.put("offers", offers);
                 hotelOffers.add(hotelData);
                 if (hotelOffers.size() >= 3) break;
             } catch (ResponseException e) {
@@ -140,14 +142,14 @@ public class TripInfoService {
             simplifiedFlights.add(simple);
             if (simplifiedFlights.size() >= 3) break;
         }
-
+        Object simplifiedFlightObject = new Gson().fromJson(simplifiedFlights, Object.class);
         // 6. Assemble response
         Map<String, Object> response = new HashMap<>();
         response.put("coordinates", Map.of("lat", lat, "lng", lng));
         response.put("originAirport", originAirport);
         response.put("destinationAirport", destinationAirport);
         response.put("hotels", hotelOffers);
-        response.put("flights", simplifiedFlights);
+        response.put("flights", simplifiedFlightObject);
         return response;
     }
 }
