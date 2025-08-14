@@ -1,121 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Flight Search</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            padding: 2rem;
-        }
-        h1 {
-            text-align: center;
-        }
-        form {
-            max-width: 500px;
-            margin: 0 auto 2rem;
-            background: #fff;
-            padding: 1rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-        }
-        input, button {
-            display: block;
-            width: 100%;
-            padding: 0.5rem;
-            margin: 0.5rem 0;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-        }
-        button {
-            background-color: #2c3e50;
-            color: #fff;
-            cursor: pointer;
-        }
-        .flight {
-            background-color: white;
-            padding: 1rem;
-            margin: 1rem auto;
-            border-radius: 8px;
-            box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
-        }
-        .flight strong {
-            color: #2c3e50;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flight Search TripCompass</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/flights.css">
 </head>
+
 <body>
-<h1>Search for Flights</h1>
+    <nav>
+        <div class="icon">TripCompass</div>
+        <ul class="navitem">
+            <li class="länk"><a href="index.html">Start</a></li>
+            <li class="länk"><a href="flights.html">Flights</a></li>
+            <li class="länk"><a href="hotels.html">Hotels</a></li>
+        </ul>
+    </nav>
+    <div class="container">
+        <header class="page-header">
+            <h1>✈️ Flight Search</h1>
+            <p>Find the best flights for your journey</p>
+        </header>
 
-<form id="flightForm">
-    <input type="text" id="origin" placeholder="Origin (e.g. JFK)" required />
-    <input type="text" id="destination" placeholder="Destination (e.g. LGW)" required />
-    <input type="date" id="departureDate" required />
-    <input type="number" id="adults" placeholder="Number of Adults" min="1" value="1" required />
-    <button type="submit">Search Flights</button>
-</form>
+        <div class="search-card">
+            <form id="flightForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="origin">From</label>
+                        <input type="text" id="origin" placeholder="e.g. JFK" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="destination">To</label>
+                        <input type="text" id="destination" placeholder="e.g. LGW" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="departureDate">Departure Date</label>
+                        <input type="date" id="departureDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="adults">Passengers</label>
+                        <input type="number" id="adults" min="1" value="1" required>
+                    </div>
+                </div>
 
-<div id="results"></div>
+                <button type="submit" class="btn-primary" id="flight-search-btn">
+                    <span>Search Flights</span>
+                    <div class="spinner hidden"></div>
+                </button>
+            </form>
+        </div>
 
-<script>
-    document.getElementById('flightForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
+        <div class="results-container">
+            <h2 class="results-header">Available Flights</h2>
+            <div id="results"></div>
+        </div>
+    </div>
 
-        const origin = document.getElementById('origin').value.trim().toUpperCase();
-        const destination = document.getElementById('destination').value.trim().toUpperCase();
-        const departureDate = document.getElementById('departureDate').value;
-        const adults = document.getElementById('adults').value;
-
-        const url = `http://localhost:7000/search/flights?origin=${origin}&destination=${destination}&departureDate=${departureDate}&adults=${adults}`;
-
-        try {
-            const response = await fetch(url);
-            const data = await response.json();
-
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '';
-
-            if (!data.length) {
-                resultsDiv.innerText = 'No flights found.';
-                return;
-            }
-
-            const directMatches = data.filter(flight => flight.destination === destination);
-            const fallback = data.filter(flight => flight.destination !== destination);
-
-            if (directMatches.length > 0) {
-                directMatches.forEach(flight => displayFlight(flight, resultsDiv));
-            } else {
-                const msg = document.createElement('p');
-                msg.innerHTML = `We haven’t found flights to <strong>${destination}</strong>. These are the closest ones:`;
-                resultsDiv.appendChild(msg);
-
-                fallback.forEach(flight => displayFlight(flight, resultsDiv));
-            }
-
-        } catch (err) {
-            document.getElementById('results').innerText = 'Failed to load flight offers.';
-            console.error(err);
-        }
-    });
-
-    function displayFlight(flight, container) {
-        const div = document.createElement('div');
-        div.className = 'flight';
-        div.innerHTML = `
-      <p><strong>${flight.origin}</strong> ✈️ <strong>${flight.destination}</strong></p>
-      <p>Departure: ${flight.departure}</p>
-      <p>Arrival: ${flight.arrival}</p>
-      <p>Duration: ${flight.duration}</p>
-      <p>Airline: ${flight.airline}</p>
-      <p><strong>${flight.price} ${flight.currency}</strong></p>
-    `;
-        container.appendChild(div);
-    }
-</script>
-
+    <script src="js/flights.js"></script>
 </body>
+
 </html>

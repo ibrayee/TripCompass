@@ -1,35 +1,48 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TripCompass</title>
-    <link rel="stylesheet" href="css/style.css" />
-    <link rel="icon" href="css/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <nav>
+        <div class="icon">TripCompass</div>
+        <ul class="navitem">
+            <li class="länk"><a href="index.html">Start</a></li>
+            <li class="länk"><a href="flights.html">Flights</a></li>
+            <li class="länk"><a href="hotels.html">Hotels</a></li>
+        </ul>
+    </nav>
+    <div id="app-container">
+        <div id="search-bar">
+            <input type="text" id="city-input" placeholder="Origin...">
+            <input type="text" id="origin-input" placeholder="Destination (e.g. ARN)">
+            <input type="date" id="checkin-input">
+            <input type="number" id="adults-input" placeholder="Adults" min="1" value="1">
+            <input type="number" id="rooms-input" placeholder="Rooms" min="1" value="1">
+            <button id="search-btn">
+                <span>Search</span>
+                <div class="spinner hidden"></div>
+            </button>
+            <div id="loading-indicator" class="hidden">Loading trip details...</div>
+        </div>
 
-<!-- Barra di ricerca -->
-<div id="search-bar">
-    <input type="text" id="city-input" placeholder="Search city..." />
-    <input type="text" id="origin-input" placeholder="Origin (e.g. ARN)" />
-    <input type="text" id="destination-input" placeholder="Destination (e.g. FCO)" />
-    <input type="date" id="checkin-input" />
-    <button onclick="searchCity()">Search</button>
-</div>
+        <div id="map"></div>
+        
+        <div id="sidebar" class="hidden">
+            <div class="sidebar-header">
+                <h2>Trip Details</h2>
+                <button id="close-sidebar">&times;</button>
+            </div>
+            <div id="results"></div>
+        </div>
+    </div>
 
-
-<!-- Mappa -->
-<div id="map"></div>
-
-<!-- Sidebar nascosta di default -->
-<div id="sidebar" class="hidden">
-    <div id="results"></div>
-</div>
-
-<!-- Script -->
-<script src="js/searchBar.js"></script>
-<script src="js/sidebar.js"></script>
-<script src="js/map.js"></script>
-<script src="js/loadGoogleMaps.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrGvXIcYVGUllsp39JAWkg1t2DA8jFMI0&callback=initMap&libraries=places,marker" async defer></script>
+    <script src="js/map.js"></script>
+    <script src="js/searchBar.js"></script>
+    <script src="js/sidebar.js"></script>
 </body>
 </html>

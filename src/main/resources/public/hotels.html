@@ -1,116 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hotel Offers</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-            padding: 2rem;
-        }
-        h1 {
-            text-align: center;
-        }
-        .hotel {
-            background: white;
-            margin: 1rem auto;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
-            max-width: 700px;
-        }
-        .hotel h2 {
-            margin-top: 0;
-        }
-        .price {
-            font-size: 1.2rem;
-            color: #2c3e50;
-            font-weight: bold;
-        }
-        .coords {
-            font-size: 0.9rem;
-            color: gray;
-        }
-        #loadMore {
-            display: block;
-            margin: 2rem auto;
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
-            cursor: pointer;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotels TripCompass</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/hotels.css">
 </head>
 <body>
-<h1>Hotel Offers</h1>
-<div id="results">Loading...</div>
-<button id="loadMore" style="display: none;">Load More Hotels</button>
+    <nav>
+        <div class="icon">TripCompass</div>
+        <ul class="navitem">
+            <li class="länk"><a href="index.html">Start</a></li>
+            <li class="länk"><a href="flights.html">Flights</a></li>
+            <li class="länk"><a href="hotels.html">Hotels</a></li>
+        </ul>
+    </nav>
+    <div class="container">
+        <header class="page-header">
+            <h1>Hotel Offers</h1>
+            <p>Find the perfect stay for your trip</p>
+        </header>
+        
+        
+        <div class="results-container">
+            <h2 class="results-header">Available Hotels</h2>
+            <div id="results"></div>
+        </div>
+        
+        <div class="load-more-container">
+            <button id="loadMore" class="btn-secondary">Load More Hotels</button>
+        </div>
+    </div>
 
-<script>
-    const allHotelData = [];
-    let offset = 0;
-    const limit = 3;
-
-    async function fetchHotels() {
-        const url = 'http://localhost:7000/search/nearby?lat=48.860698&lng=2.349385&checkInDate=2025-07-10&adults=2&roomQuantity=1';
-        try {
-            const response = await fetch(url);
-            const data = await response.json();
-
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '';
-
-            if (!data.offers || data.offers.length === 0) {
-                resultsDiv.innerText = 'No hotels found.';
-                return;
-            }
-
-            allHotelData.push(...data.offers);
-            renderNextHotels();
-
-            if (allHotelData.length > limit) {
-                document.getElementById('loadMore').style.display = 'block';
-            }
-
-        } catch (err) {
-            document.getElementById('results').innerText = 'Failed to load hotel offers.';
-            console.error(err);
-        }
-    }
-
-    function renderNextHotels() {
-        const container = document.getElementById('results');
-        const nextHotels = allHotelData.slice(offset, offset + limit);
-        offset += limit;
-
-        nextHotels.forEach(hotelObj => {
-            const hotelData = hotelObj.offers[0];
-            const hotel = hotelData.hotel;
-            const offer = hotelData.offers[0];
-
-            const div = document.createElement('div');
-            div.className = 'hotel';
-
-            div.innerHTML = `
-          <h2>${hotel.name}</h2>
-          <p class="coords">${hotel.latitude}, ${hotel.longitude}</p>
-          <p>${offer.room.description?.text || 'No description available.'}</p>
-          <p class="price">${offer.price.total} ${offer.price.currency}</p>
-          <p><a href="${offer.self}" target="_blank">View on Amadeus</a></p>
-        `;
-
-            container.appendChild(div);
-        });
-
-        if (offset >= allHotelData.length) {
-            document.getElementById('loadMore').style.display = 'none';
-        }
-    }
-
-    document.getElementById('loadMore').addEventListener('click', renderNextHotels);
-
-    fetchHotels();
-</script>
+    <script src="js/hotels.js"></script>
 </body>
 </html>
