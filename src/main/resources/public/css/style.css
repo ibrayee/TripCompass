@@ -16,11 +16,11 @@
   box-sizing: border-box;
 }
 
-body, html {
-    height: 100%;
-    font-family: Arial, sans-serif;
-    background-color: var(--extra-light);
-    color: var(--text-dark);
+html, body {
+  height: 100%;
+  font-family: "Poppins", sans-serif;
+  background-color: var(--extra-light);
+  color: var(--text-dark);
 }
 
 a {
@@ -28,19 +28,74 @@ a {
   color: inherit;
 }
 
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 0.5rem;
+}
+
+.container {
+  width: 90%;
+  max-width: var(--max-width);
+  margin: auto;
+  padding: 2rem 1rem;
+}
+
+nav {
+  background-color: var(--white);
+  box-shadow: var(--shadow);
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+}
+
+.icon {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.navitem {
+  display: flex;
+  gap: 2rem;
+  list-style: none;
+}
+
+.navitem .länk a {
+  font-weight: 500;
+  color: var(--text-light);
+  transition: 0.3s;
+}
+
+.navitem .länk a:hover {
+  color: var(--primary-color-dark);
+}
+
 #map {
-    height: 100%;
-    width: 100%;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 #search-bar {
- flex-direction: column;
-    position: static;
-    transform: none;
-    margin: 1rem auto;
-    box-shadow: var(--shadow);;
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: var(--white);
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 #search-bar input,
@@ -66,6 +121,65 @@ a {
   background-color: var(--primary-color-dark);
 }
 
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top: 2px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#sidebar {
+  position: absolute;
+  top: 6rem;
+  right: 0;
+  width: 30%;
+  max-width: 400px;
+  height: calc(100% - 6rem);
+  background-color: var(--white);
+  padding: 1.5rem;
+  border-radius: 1rem 0 0 1rem;
+  box-shadow: -5px 0 20px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+  z-index: 900;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.card, .hotel-card, .flight-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.price-tag {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #34a853;
+  margin-top: 0.5rem;
+}
+
+
+#results .hotel, #results .flight {
+  border: 1px solid var(--extra-light);
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+
 button#loadMore {
   display: block;
   margin: 2rem auto;
@@ -84,151 +198,6 @@ button#loadMore:hover {
   background-color: var(--primary-color-dark);
 }
 
-#sidebar {
-    position: absolute;
-    top: 60px;
-    right: 0;
-    width: 30%;
-    max-width: 400px;
-    height: calc(100% - 60px);
-    background: #f5f5f5;
-    padding: 1em;
-    box-shadow: -2px 0 5px rgba(0,0,0,0.1);
-    overflow-y: auto;
-    z-index: 999;
-}
-
-.flex { display: flex; gap: 1rem; }
-
-.hidden { display: none !important; }
-
-.container { 
-  width: 90%; 
-  max-width: var(--max-width);
-  margin: auto;
-  padding: 2rem 1rem;
-}
-
-.card, .hotel-card, .flight-card {
-  background: var(--white);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-#results .hotel, #results .flight {
-  border: 1px solid var(--extra-light);
-  background: var(--white);
-  border-radius: var(--radius);
-  padding: 1rem;
-  margin-bottom: 1rem;
-  box-shadow: var(--shadow);
-}
-
-
-.section-title {
-    font-weight: bold;
-    margin-top: 1em;
-}
-
-.hotel, .flight {
-    background: white;
-    margin-bottom: 1em;
-    padding: 0.5em;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-}
-
-img {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    border-radius: 0.5rem;
-}
-
-.hotel-card, .flight-card {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  border: 1px solid #eee;
-}
-
-.price-tag {
-  font-size: 1.3rem;
-  font-weight: bold;
-  color: #34a853;
-  margin: 0.5rem 0;
-}
-
-.icon {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--primary-color);
-}
-.spinner {
-  border: 2px solid rgba(0,0,0,0.1);
-  border-top: 2px solid var(--primary-color);
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-nav {
-  background-color: var(--white);
-  box-shadow: var(--shadow);
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 999;
-  flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-}
-
-.navitem{
-  display: flex;
-  gap: 2rem;
-  list-style: none;
-}
-
-.navitem .länk a {
-  font-weight: 500;
-  color: var(--text-light);
-  transition: 0.3s;
-}
-
-.navitem .länk a:hover {
-  color: var(--primary-color-dark);
-}
-
-
-
-#sidebar {
-  position: absolute;
-  top: 6rem;
-  right: 0;
-  width: 30%;
-  max-width: 400px;
-  height: calc(100% - 6rem);
-  background-color: var(--white);
-  padding: 1.5rem;
-  border-radius: 1rem 0 0 1rem;
-  box-shadow: -5px 0 20px rgba(0, 0, 0, 0.1);
-  overflow-y: auto;
-  z-index: 900;
-}
 
 @media (max-width: 900px) {
   #sidebar {
@@ -241,10 +210,28 @@ nav {
     margin-top: 1rem;
   }
 
+  #search-bar {
+    flex-direction: column;
+    position: static;
+    transform: none;
+    margin: 1rem auto;
+    box-shadow: var(--shadow);
+  }
+
+  nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
 @media (max-width: 600px) {
   .navitem {
     flex-direction: column;
     gap: 0.5rem;
   }
-  
-}}
+
+  .icon {
+    font-size: 1.3rem;
+  }
+}
