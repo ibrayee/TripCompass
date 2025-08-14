@@ -7,17 +7,19 @@ import io.github.cdimascio.dotenv.Dotenv;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 
 public class RouteInfo { // använder Google maps Distance API
     //Distans från en startdestination till en slutdestination
     //Kanske visa vägbeskrivning från startdestination till flygplats?
     //hämta longitude och latitude från amadeus
 
-    Dotenv dotenv = Dotenv.load();
-    String apiKey = dotenv.get("GOOGLE_MAPS_API_KEY");
+
+   private static final String apiKey = Dotenv.load().get("GOOGLE_MAPS_API_KEY");
     String startPlace = "";
     String endPlace = "";
     String jSonRoute = "";
@@ -31,9 +33,13 @@ public class RouteInfo { // använder Google maps Distance API
 
     public void fetchRoute() {
         HttpClient httpClient = HttpClient.newHttpClient();
+
+        String encodeStart = URLEncoder.encode(startPlace, StandardCharsets.UTF_8);
+        String encodeEnd   = URLEncoder.encode(endPlace, StandardCharsets.UTF_8);
+
         HttpRequest httpRequest =
                 HttpRequest.newBuilder()
-                        .uri(URI.create("https://maps.googleapis.com/maps/api/directions/json?origin=" + startPlace + "&destination=" + endPlace + "&key=" + apiKey))
+                        .uri(URI.create("https://maps.googleapis.com/maps/api/directions/json?origin=" + encodeStart + "&destination=" + encodeEnd + "&key=" + apiKey))
                         .build();
 
         HttpResponse<String> response = null;
@@ -57,7 +63,6 @@ public class RouteInfo { // använder Google maps Distance API
         if (routesArr.size() > 0) {
             JsonObject answerArrFirst = routesArr.get(0).getAsJsonObject();
 
-
             JsonArray legs = answerArrFirst.getAsJsonArray("legs");
 
             if (legs.size() > 0) {
@@ -67,7 +72,6 @@ public class RouteInfo { // använder Google maps Distance API
                 JsonObject distanceKm = answerLegsArr.getAsJsonObject("distance"); //distansen
 
                 JsonObject timeTrip = answerLegsArr.getAsJsonObject("duration");
-
 
                 return "Distansen är : " + distanceKm.get("text").getAsString() + " Tiden är: " + timeTrip.get("text").getAsString();
 
@@ -96,7 +100,7 @@ public class RouteInfo { // använder Google maps Distance API
 
                 System.out.println("The polyline code " + thePolyline);
 
-                return "the polyline " + thePolyline;
+                return thePolyline;
 
             } else {
                 return "No polyline could be found";
