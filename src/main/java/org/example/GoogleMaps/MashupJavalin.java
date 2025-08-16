@@ -25,7 +25,7 @@ public class MashupJavalin {
             String endPlace = ctx.queryParam ("endPlace");
 
             if (startPlace == null || startPlace.isBlank() || endPlace == null || endPlace.isBlank()) {
-                ctx.status(400).result("starPlace and endPlace has to be typed");
+                ctx.status(400).result("startPlace and endPlace has to be typed");
                 return;
             }
 
@@ -64,16 +64,42 @@ public class MashupJavalin {
     public void hotelsAndSights(Javalin app) {
         app.get("/mashupJavalin/hotelsAndSights", ctx -> {
 
-            String hotelName;
-            String placeType = ctx.queryParam("placeType");
+            String hotelName = ctx.queryParam("hotelName");
+            String city = ctx.queryParam("city");            String placeType = ctx.queryParam("placeType");
 
             //Geocoding code:
 
-                    if (lat == null || lng == null || placeType == null) {
-                        ctx.status(400).result("There is no lat, lng and/or placeType");
-                        return;
-                    }
+            if (placeType == null || placeType.isBlank()) {
+                ctx.status(400).result("placeType has to be typed");
+                return;
+            }
+            double[] coords = null;
+            if (hotelName != null && !hotelName.isBlank()) {
+                coords = amadeusService.geocodeCityToCoords(hotelName);
+            } else if (city != null && !city.isBlank()) {
+                coords = amadeusService.geocodeCityToCoords(city);
+            } else {
+                ctx.status(400).result("hotelName or city has to be typed");
+                return;
+            }
 
+            if (coords == null) {
+                ctx.status(404).result("Could not find coordinates for given hotel/city");
+                return;
+            }
+
+            String lat = String.valueOf(coords[0]);
+            String lng = String.valueOf(coords[1]);
+
+            PlacesNearby placesNearby = new PlacesNearby(lat, lng);
+
+            String results;
+            try {
+                results = placesNearby.getPlaceNameAndAdress(placeType);
+            } catch (Exception e) {
+                ctx.status(500).result("Failed to get nearby places");
+                return;
+            }
 
             ctx.result(results)
                     .contentType("application/json");
@@ -83,32 +109,131 @@ public class MashupJavalin {
     }
 
     //En metod som ritar polyline och visar distans från flygplats till hotell
-    public void distToHotel (Javalin app) {
+    public void distToHotel(Javalin app) {
         app.get("/mashupJavalin/distToHotel", ctx -> {
 
-        String destAirport = ctx.queryParam ("endPlace");
-        String hotell = ctx.queryParam ("hotell");
+            String airport = ctx.queryParam("airport");
+            String hotel = ctx.queryParam("hotel");
 
-        String airportLngLat = airportCoords[0] + "," + airportCoords[1]; //från amadeus
-        String hotelLngLat = hotelCoords[0] + "," + hotelCoords[1];
+            if (airport == null || airport.isBlank() || hotel == null || hotel.isBlank()) {
+                ctx.status(400).result("airport and hotel parameters are required");
+                return;
+            }
 
-        RouteInfo route = new RouteInfo(airportLngLat, hotelLngLat);   //från google maps
-        route.fetchRoute();
-        String polyline = route.getPolyline();
+            double[] airportCoords = amadeusService.geocodeCityToCoords(airport);
+            if (airportCoords == null) {
+                ctx.status(404).result("Could not find coordinates for airport");
+                return;
+            }
 
+            double[] hotelCoords;
+            try {
+                Geocodes geo = new Geocodes(hotel);
+                hotelCoords = new double[]{geo.getLat(), geo.getLng()};
+            } catch (Exception e) {
+                ctx.status(500).result("Failed to geocode hotel: " + e.getMessage());
+                return;
+            }
+                    String airportLngLat = airportCoords[0] + "," + airportCoords[1];
+                    String hotelLngLat = hotelCoords[0] + "," + hotelCoords[1];
 
+                    RouteInfo route = new RouteInfo(airportLngLat, hotelLngLat);
+                    route.fetchRoute();
 
+                    String polyline = route.getPolyline();
+                    String distance = route.getDistance();
+                    String duration = route.getDuration();
 
-    });
-    }
+                    if (polyline == null || distance == null || duration == null) {
+                        ctx.status(500).result("Unable to fetch route information");
+                        return;
+                    }
+            JsonObject routeObj = new JsonObject();
+            routeObj.addProperty("airport", airport);
+            routeObj.addProperty("hotel", hotel);
+            routeObj.addProperty("polyline", polyline);
+            routeObj.addProperty("distance", distance);
+            routeObj.addProperty("duration", duration);
+
+            ctx.result(routeObj.toString()).contentType("application/json");
+        }); }
 
     //En metod som ritar polyline (google maps) från stad till flygplats (amadeus) och visar distans och tid bil
-    public void distToAirport () {
+    public void distToAirport(Javalin app) {
 
-    }
+        app.get("/mashupJavalin/distToAirport", ctx -> {
+
+            String city = ctx.queryParam("city");
+
+            if (city == null || city.isBlank()) {
+                ctx.status(400).result("city must be provided");
+                return;
+            }
+
+            try {
+                double[] cityCoords = amadeusService.geocodeCityToCoords(city);
+                if (cityCoords == null) {
+                    ctx.status(404).result("Could not find coordinates for city");
+                    return;
+                }
+
+                String airportCode;
+                try {
+                    airportCode = amadeusService.findNearestAirportCode(cityCoords[0], cityCoords[1]);
+                } catch (Exception e) {
+                    ctx.status(500).result("Failed to locate nearest airport");
+                    return;
+                }
+
+                double[] airportCoords = amadeusService.geocodeCityToCoords(airportCode);
+                if (airportCoords == null) {
+                    ctx.status(404).result("Could not find coordinates for airport");
+                    return;
+                }
+
+                String cityCoordStr = cityCoords[0] + "," + cityCoords[1];
+                String airportCoordStr = airportCoords[0] + "," + airportCoords[1];
+
+                RouteInfo routeInfo = new RouteInfo(cityCoordStr, airportCoordStr);
+                routeInfo.fetchRoute();
+
+                String polyline = routeInfo.getPolyline();
+                String distTime = routeInfo.getRouteTimeAndDist();
+
+                String distance = null;
+                String duration = null;
+                if (distTime != null) {
+                    int timeIdx = distTime.indexOf("Tiden är:");
+                    int distIdx = distTime.indexOf("Distansen är :");
+                    if (distIdx >= 0 && timeIdx > distIdx) {
+                        distance = distTime.substring(distIdx + "Distansen är :".length(), timeIdx).trim();
+                        duration = distTime.substring(timeIdx + "Tiden är:".length()).trim();
+                    }
+                }
+
+                JsonObject result = new JsonObject();
+                result.addProperty("city", city);
+                result.addProperty("airport", airportCode);
+                if (polyline != null) {
+                    result.addProperty("polyline", polyline);
+                }
+                if (distance != null) {
+                    result.addProperty("distance", distance);
+                }
+                if (duration != null) {
+                    result.addProperty("duration", duration);
+                }
+
+                ctx.result(result.toString()).contentType("application/json");
+
+            } catch (Exception e) {
+                ctx.status(500).result("Internal server error");
+            }
+
+        });
 
 
 
-}
+}}
 
 
