@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mashup TripCompass</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<nav>
+    <div class="icon">TripCompass</div>
+    <ul class="navitem">
+        <li class="länk"><a href="index.html">Start</a></li>
+        <li class="länk"><a href="flights.html">Flights</a></li>
+        <li class="länk"><a href="hotels.html">Hotels</a></li>
+        <li class="länk"><a href="mashup.html">Mashup</a></li>
+    </ul>
+</nav>
+<div class="container">
+    <div id="map" style="height:500px;"></div>
+    <form id="mashup-form">
+        <input type="text" id="start-city" placeholder="Start city or airport">
+        <input type="text" id="end-city" placeholder="End city">
+        <input type="text" id="hotel-name" placeholder="Hotel (optional)">
+        <input type="text" id="place-type" placeholder="Place type (e.g. museum)">
+        <button type="submit" class="btn-primary">Show Trip</button>
+    </form>
+    <div id="results"></div>
+</div>
+<script src="js/mashup.js"></script>
+<script src="js/loadGoogleMaps.js"></script>
+</body>
+</html>

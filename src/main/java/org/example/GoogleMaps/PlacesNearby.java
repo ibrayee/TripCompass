@@ -20,49 +20,43 @@ public class PlacesNearby {
     Dotenv dotenv = Dotenv.load();
     String apiKey = dotenv.get("GOOGLE_MAPS_API_KEY");
     String placeType;
-    int radius=2000;
+    int radius = 2000;
 
-public PlacesNearby(String lat, String lng) {
-    this.lat=lat;
-    this.lng=lng;
+    public PlacesNearby(String lat, String lng) {
+        this.lat = lat;
+        this.lng = lng;
+    } public String fetchPlaces(String placeType) {
 
+        HttpClient httpClient = HttpClient.newHttpClient();
+        HttpRequest httpRequest =
+                HttpRequest.newBuilder()
+                        .uri(URI.create("https://maps.googleapis.com/maps/api/place/nearbysearch/json" +
+                                "?location=" + lat + "," + lng +
+                                "&radius=" + radius +
+                                "&type=" + placeType +
+                                "&key=" + apiKey))
+                        .build();
 
+        HttpResponse<String> response = null;
+        try {
+            response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+        jSonPlaces = response.body();
 
-}
-public String fetchPlaces ( String placeType) {
-
-    HttpClient httpClient = HttpClient.newHttpClient();
-    HttpRequest httpRequest =
-            HttpRequest.newBuilder()
-                    .uri(URI.create("https://maps.googleapis.com/maps/api/place/nearbysearch/json" +
-                            "?location=" + lat + "," + lng +
-                            "&radius=" + radius +
-                            "&type=" + placeType +
-                            "&key=" + apiKey))
-                    .build();
-
-    HttpResponse<String> response = null;
-    try {
-        response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-    } catch (IOException | InterruptedException e) {
-        e.printStackTrace();
+        return jSonPlaces;
     }
-    jSonPlaces = response.body();
-
-    return jSonPlaces;
-
-}
 
 
-public String getPlaceNameAndAdress (String placeType) {
+    public String getPlaceNameAndAdress(String placeType) {
 
-    fetchPlaces(placeType);
+        fetchPlaces(placeType);
+        JsonObject responseJObj = JsonParser.parseString(jSonPlaces).getAsJsonObject();  //converts Json String answer to JsonObject
 
-    JsonObject responseJObj = JsonParser.parseString(jSonPlaces).getAsJsonObject();  //converts Json String answer to JsonObject
+        JsonArray placesResArr = responseJObj.getAsJsonArray("results");
 
-    JsonArray placesResArr = responseJObj.getAsJsonArray("results");
-
-      JsonArray resultPlacesArr = new JsonArray();
+        JsonArray resultPlacesArr = new JsonArray();
 
         for (int i = 0; i < placesResArr.size(); i++) {   //Flera platser inom radien
             JsonObject placeJson = placesResArr.get(i).getAsJsonObject();

@@ -75,8 +75,8 @@ public class MashupJavalin {
             }
             double[] coords = null;
             if (hotelName != null && !hotelName.isBlank()) {
-                coords = amadeusService.geocodeCityToCoords(hotelName);
-            } else if (city != null && !city.isBlank()) {
+                Geocodes geo = new Geocodes(hotelName);
+                coords = new double[]{geo.getLat(), geo.getLng()};            } else if (city != null && !city.isBlank()) {
                 coords = amadeusService.geocodeCityToCoords(city);
             } else {
                 ctx.status(400).result("hotelName or city has to be typed");
