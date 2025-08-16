@@ -1,5 +1,6 @@
 package org.example;
 
+import com.amadeus.exceptions.ResponseException;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -7,7 +8,6 @@ import com.google.gson.JsonParser;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import com.amadeus.exceptions.ResponseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -69,6 +69,7 @@ public class TripController {
         // Other endpoints kept as before
         app.get("/search/flights", TripController::handleFlightSearch);
         app.get("/search/nearby", TripController::handleNearbySearch);
+        app.get("/search/locations", TripController::handleLocationSearch);
 
         // New: delegate to TripInfoService
         app.get("/trip-info", TripController::handleTripInfo);
@@ -116,23 +117,38 @@ public class TripController {
             int adults = Integer.parseInt(adultsStr.trim());
             int rooms = Integer.parseInt(roomQuantityStr.trim());
 
+            double oLat = 0;
+            double oLng = 0;
+            if (hasOriginCoords) {
+                oLat = Double.parseDouble(originLatStr.trim().replace(",", "."));
+                oLng = Double.parseDouble(originLngStr.trim().replace(",", "."));
+            }
+
             String resolvedOrigin = null;
             if (hasOrigin) {
                 resolvedOrigin = origin.trim();
             } else if (hasOriginCoords) {
-                double oLat = Double.parseDouble(originLatStr.trim());
-                double oLng = Double.parseDouble(originLngStr.trim());
                 resolvedOrigin = amadeusService.findNearestAirportCode(oLat, oLng);
+            }
+
+            if (resolvedOrigin == null || resolvedOrigin.isEmpty()) {
+                ctx.status(404).json(Map.of(
+                        "error", "No airport close to you"
+                ));
+                return;
             }
             System.out.println("Origin used for airport search: " + resolvedOrigin);
 
-            if (resolvedOrigin == null || resolvedOrigin.isEmpty()) {
-                throw new IllegalArgumentException("Could not resolve origin airport");
+            Map<String, Object> result;
+            if (hasOriginCoords) {
+                result = tripInfoService.getTripInfo(
+                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, adults, rooms
+                );
+            } else {
+                result = tripInfoService.getTripInfo(
+                        lat, lng, resolvedOrigin, checkInDate, adults, rooms
+                );
             }
-
-            Map<String, Object> result = tripInfoService.getTripInfo(
-                    lat, lng, resolvedOrigin, checkInDate, adults, rooms
-            );
 
             ctx.contentType("application/json");
             ctx.json(result);
@@ -159,6 +175,28 @@ public class TripController {
 
     }
 
+    private static void handleLocationSearch(Context ctx) {
+        String keyword = ctx.queryParam("keyword");
+        if (keyword == null || keyword.isBlank()) {
+            ctx.status(400).json(Map.of("error", "Missing keyword"));
+            return;
+        }
+        try {
+            List<Map<String, Object>> locations = amadeusService.searchLocations(keyword);
+            ctx.json(locations);
+        } catch (ResponseException e) {
+            ctx.status(502).json(Map.of(
+                    "error", "Upstream service error",
+                    "details", e.getMessage()
+            ));
+        } catch (Exception e) {
+            ctx.status(500).json(Map.of(
+                    "error", "Internal Server Error",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
     private static void handleFlightSearch(Context ctx) {
         String origin = ctx.queryParam("origin");
         String destination = ctx.queryParam("destination");
@@ -182,11 +220,11 @@ public class TripController {
                 var offer = offerElement.getAsJsonObject();
 
                 var itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
-                var segment = itinerary.getAsJsonArray("segments").get(0).getAsJsonObject();
-
-                var departure = segment.getAsJsonObject("departure");
-                var arrival = segment.getAsJsonObject("arrival");
-
+                var segments = itinerary.getAsJsonArray("segments");
+                var firstSegment = segments.get(0).getAsJsonObject();
+                var lastSegment = segments.get(segments.size() - 1).getAsJsonObject();
+                var departure = firstSegment.getAsJsonObject("departure");
+                var arrival = lastSegment.getAsJsonObject("arrival");
                 JsonObject simplified = new JsonObject();
                 simplified.addProperty("origin", departure.get("iataCode").getAsString());
                 simplified.addProperty("destination", arrival.get("iataCode").getAsString());
@@ -195,9 +233,31 @@ public class TripController {
                 simplified.addProperty("duration", itinerary.get("duration").getAsString());
                 simplified.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
                 simplified.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-                simplified.addProperty("airline", segment.get("carrierCode").getAsString());
+                simplified.addProperty("airline", firstSegment.get("carrierCode").getAsString());
 
-                simplifiedArray.add(simplified);
+                JsonArray legs = new JsonArray();
+                JsonArray stopovers = new JsonArray();
+                for (int i = 0; i < segments.size(); i++) {
+                    var seg = segments.get(i).getAsJsonObject();
+                    var segDep = seg.getAsJsonObject("departure");
+                    var segArr = seg.getAsJsonObject("arrival");
+
+                    JsonObject leg = new JsonObject();
+                    leg.addProperty("origin", segDep.get("iataCode").getAsString());
+                    leg.addProperty("destination", segArr.get("iataCode").getAsString());
+                    leg.addProperty("departure", segDep.get("at").getAsString());
+                    leg.addProperty("arrival", segArr.get("at").getAsString());
+                    leg.addProperty("airline", seg.get("carrierCode").getAsString());
+                    legs.add(leg);
+
+                    if (i < segments.size() - 1) {
+                        stopovers.add(segArr.get("iataCode").getAsString());
+                    }
+                }
+                simplified.add("segments", legs);
+                if (stopovers.size() > 0) {
+                    simplified.add("stopovers", stopovers);
+                }                simplifiedArray.add(simplified);
             }
 
             ctx.contentType("application/json");
@@ -282,24 +342,58 @@ public class TripController {
         String latStr = ctx.queryParam("lat");
         String lngStr = ctx.queryParam("lng");
         String limitStr = ctx.queryParam("limit");
+        String radiusStr = ctx.queryParam("radius");
         int limit = 5; // default
         if (limitStr != null && !limitStr.isEmpty()) {
             try {
                 limit = Integer.parseInt(limitStr);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+
+            }
+        }
+        int radius = 200; // default radius in km
+        if (radiusStr != null && !radiusStr.isEmpty()) {
+            try {
+                radius = Integer.parseInt(radiusStr);
+            } catch (NumberFormatException ignored) {
+
+            }
         }
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
-            ctx.status(400).result("Invalid coordinates");
-            return;
+            ctx.status(400).json(Map.of("error", "Invalid coordinates"));            return;
         }
         try {
             double lat = Double.parseDouble(latStr);
             double lng = Double.parseDouble(lngStr);
 
-            List<Map<String, Object>> airports = amadeusService.getNearbyAirportDetails(lat, lng, 200, limit);
+            List<Map<String, Object>> airports =
+                    amadeusService.getNearbyAirportDetails(lat, lng, radius, limit);
+            if (airports.isEmpty()) {
+                String nearestCode = amadeusService.findNearestAirportCode(lat, lng, radius);
+                if (nearestCode != null) {
+                    List<Map<String, Object>> fallback =
+                            amadeusService.getNearbyAirportDetails(lat, lng, 1000, 1);
+                    if (!fallback.isEmpty()) {
+                        ctx.json(fallback);
+                    } else {
+                        ctx.json(List.of(Map.of("iata", nearestCode)));
+                    }
+                    return;
+                }
+
+                ctx.status(404).json(
+                        Map.of("error", "Dataset di test limitato a US/ES/UK/DE/IN")
+                );
+                return;
+            }
+
             ctx.json(airports);
+        } catch (ResponseException e) {
+            ctx.status(502).json(Map.of("error", "Upstream service error"));
         } catch (Exception e) {
-            ctx.status(500).result("Internal Server Error: " + e.getMessage());
+            ctx.status(500).json(
+                    Map.of("error", "Internal Server Error", "message", e.getMessage())
+            );
         }
     }
 }

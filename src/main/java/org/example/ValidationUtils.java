@@ -1,9 +1,10 @@
 package org.example;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 
 public class ValidationUtils {
     private static final Logger logger = LoggerFactory.getLogger(ValidationUtils.class);
@@ -18,6 +19,10 @@ public class ValidationUtils {
     }
 
     public static boolean isFutureDate(String dateStr) {
+        if (dateStr == null) {
+            logger.warn("Date string is null");
+            return false;
+        }
         try {
             LocalDate date = LocalDate.parse(dateStr);
             return date.isAfter(LocalDate.now());
