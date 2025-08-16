@@ -5,9 +5,9 @@ import io.javalin.Javalin;
 public class GoogleJavalin {
 
 
-    public void theRouteTimeAndDistance (Javalin javalin) {
+    public void theRouteTimeAndDistance (Javalin app) {
 
-      javalin.get("/route/info", ctx -> {     //visar både tid och distans men bil och inte flyg
+      app.get("/route/info", ctx -> {     //visar både tid och distans men bil och inte flyg
 
           String startPlace = ctx.queryParam("startPlace");
           String endPlace = ctx.queryParam("endPlace");
@@ -24,9 +24,9 @@ public class GoogleJavalin {
 
     }
 
-    public void polyLine (Javalin javalin) {
+    public void polyLine (Javalin app) {
 
-        javalin.get("/route/polyline", ctx -> {
+        app.get("/route/polyline", ctx -> {
             String startPlace = ctx.queryParam("startPlace");
             String endPlace = ctx.queryParam("endPlace");
 
@@ -46,9 +46,9 @@ public class GoogleJavalin {
     }
 
 
-    public void thePlaces (Javalin javalin) {
+    public void thePlaces (Javalin app) {
 
-        javalin.get("/places/nearby", ctx -> {
+        app.get("/places/nearby", ctx -> {
             String lat = ctx.queryParam("lat");
             String lng = ctx.queryParam("lng");
             String placeType = ctx.queryParam("type");
@@ -56,7 +56,7 @@ public class GoogleJavalin {
 
         PlacesNearby placesNearby = new PlacesNearby(lat, lng);
 
-        String placesRes = placesNearby.getPlaceNameAndAdress(placeType, placeType);
+        String placesRes = placesNearby.getPlaceNameAndAdress(placeType);
 
         ctx.result(placesRes);
     });

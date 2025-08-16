@@ -54,7 +54,7 @@ public String fetchPlaces ( String placeType) {
 }
 
 
-public String getPlaceNameAndAdress (String placeType, String nameOfplace) {
+public String getPlaceNameAndAdress (String placeType) {
 
     fetchPlaces(placeType);
 
@@ -62,18 +62,25 @@ public String getPlaceNameAndAdress (String placeType, String nameOfplace) {
 
     JsonArray placesResArr = responseJObj.getAsJsonArray("results");
 
-        StringBuilder result = new StringBuilder();
+      JsonArray resultPlacesArr = new JsonArray();
 
         for (int i = 0; i < placesResArr.size(); i++) {   //Flera platser inom radien
             JsonObject placeJson = placesResArr.get(i).getAsJsonObject();
 
+            JsonObject placeObject = new JsonObject();
+
+            placeObject.addProperty("Name of place ", placeJson.get("name").getAsString());
+            placeObject.addProperty("adress ", placeJson.get("vicinity").getAsString());
+            placeObject.addProperty("type of place", placeType);
+
+
             String name = placeJson.get("name").getAsString();
             String address = placeJson.get("vicinity").getAsString();
 
-            result.append("Namn: ").append(name).append("  Adress: ").append(address).append(" | Typ av plats: ").append(nameOfplace).append("\n");
+            resultPlacesArr.add(placeObject);
         }
 
-        return result.toString();
+        return resultPlacesArr.toString();
         }
 
 
