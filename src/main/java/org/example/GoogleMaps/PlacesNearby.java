@@ -25,8 +25,9 @@ public class PlacesNearby {
     public PlacesNearby(String lat, String lng) {
         this.lat = lat;
         this.lng = lng;
-    } public String fetchPlaces(String placeType) {
+    }
 
+    public String fetchPlaces(String placeType) {
         HttpClient httpClient = HttpClient.newHttpClient();
         HttpRequest httpRequest =
                 HttpRequest.newBuilder()
@@ -48,7 +49,6 @@ public class PlacesNearby {
         return jSonPlaces;
     }
 
-
     public String getPlaceNameAndAdress(String placeType) {
 
         fetchPlaces(placeType);
@@ -67,7 +67,6 @@ public class PlacesNearby {
             placeObject.addProperty("adress ", placeJson.get("vicinity").getAsString());
             placeObject.addProperty("type of place", placeType);
 
-
             String name = placeJson.get("name").getAsString();
             String address = placeJson.get("vicinity").getAsString();
 
@@ -75,10 +74,5 @@ public class PlacesNearby {
         }
 
         return resultPlacesArr.toString();
-        }
-
-
-        }
-
-
-
+    }
+}

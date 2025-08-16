@@ -1,9 +1,22 @@
 package org.example.GoogleMaps;
 
+import com.amadeus.exceptions.ResponseException;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import org.example.AmadeusService;
+
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 public class MashupJavalin {
 
@@ -61,13 +74,25 @@ public class MashupJavalin {
 
     //En metod som visar sevärdheter runtomkring(google maps) när man väljer ett hotell (amadeus)
     //kanske använda citycoords från amadeus?
+    /**
+     * JSON response structure:
+     * {
+     *   "hotels": [{
+     *       "name": String,
+     *       "lat": double,
+     *       "lng": double,
+     *       "thumbnailUrl": String,
+     *       "nightlyPrice": double
+     *   }, ...],
+     *   "sights": [ {"Name of place ": ..., "adress ": ..., "type of place": ...}, ... ]
+     * }
+     */
     public void hotelsAndSights(Javalin app) {
         app.get("/mashupJavalin/hotelsAndSights", ctx -> {
 
             String hotelName = ctx.queryParam("hotelName");
             String city = ctx.queryParam("city");            String placeType = ctx.queryParam("placeType");
 
-            //Geocoding code:
 
             if (placeType == null || placeType.isBlank()) {
                 ctx.status(400).result("placeType has to be typed");
@@ -76,8 +101,8 @@ public class MashupJavalin {
             double[] coords = null;
             if (hotelName != null && !hotelName.isBlank()) {
                 Geocodes geo = new Geocodes(hotelName);
-                coords = new double[]{geo.getLat(), geo.getLng()};            } else if (city != null && !city.isBlank()) {
-                coords = amadeusService.geocodeCityToCoords(city);
+                coords = new double[]{geo.getLat(), geo.getLng()};
+            } else if (city != null && !city.isBlank()) {                coords = amadeusService.geocodeCityToCoords(city);
             } else {
                 ctx.status(400).result("hotelName or city has to be typed");
                 return;
@@ -93,16 +118,95 @@ public class MashupJavalin {
 
             PlacesNearby placesNearby = new PlacesNearby(lat, lng);
 
-            String results;
+            JsonArray sightsArr;
             try {
-                results = placesNearby.getPlaceNameAndAdress(placeType);
-            } catch (Exception e) {
+                String results = placesNearby.getPlaceNameAndAdress(placeType);
+                sightsArr = JsonParser.parseString(results).getAsJsonArray();            } catch (Exception e) {
                 ctx.status(500).result("Failed to get nearby places");
                 return;
             }
 
-            ctx.result(results)
-                    .contentType("application/json");
+            JsonArray hotelsArr = new JsonArray();
+            try {
+                JsonArray hotels = JsonParser
+                        .parseString(amadeusService.getHotelsByGeocode(coords[0], coords[1], 5))
+                        .getAsJsonArray();
+
+                HttpClient client = HttpClient.newHttpClient();
+                String checkInDate = ctx.queryParam("checkInDate");
+                int adults = 1;
+                try { adults = Integer.parseInt(ctx.queryParam("adults")); } catch (Exception ignored) {}
+                int rooms = 1;
+                try { rooms = Integer.parseInt(ctx.queryParam("roomQuantity")); } catch (Exception ignored) {}
+
+                for (var elem : hotels) {
+                    JsonObject hObj = elem.getAsJsonObject();
+                    if (!hObj.has("hotelId") || !hObj.has("name") || !hObj.has("geoCode")) {
+                        continue;
+                    }
+                    String hId = hObj.get("hotelId").getAsString();
+                    String hName = hObj.get("name").getAsString();
+                    JsonObject geo = hObj.getAsJsonObject("geoCode");
+                    double hLat = geo.get("latitude").getAsDouble();
+                    double hLng = geo.get("longitude").getAsDouble();
+
+                    // Fetch price
+                    double price;
+                    try {
+                        JsonArray offerRoot = JsonParser
+                                .parseString(amadeusService.getHotelOffers(hId, adults, checkInDate, rooms))
+                                .getAsJsonArray();
+                        if (offerRoot.size() == 0) continue;
+                        JsonArray offerList = offerRoot.get(0).getAsJsonObject().getAsJsonArray("offers");
+                        if (offerList == null || offerList.size() == 0) continue;
+                        price = offerList.get(0).getAsJsonObject()
+                                .getAsJsonObject("price")
+                                .get("total").getAsDouble();
+                    } catch (Exception e) {
+                        continue; // skip if pricing unavailable
+                    }
+
+                    // Fetch thumbnail from Google Places
+                    String thumb = null;
+                    try {
+                        String encoded = URLEncoder.encode(hName + (city != null ? ", " + city : ""), StandardCharsets.UTF_8);
+                        String url = "https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=" +
+                                encoded + "&inputtype=textquery&fields=photos&key=" + dotenv.get("GOOGLE_MAPS_API_KEY");
+                        HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).build();
+                        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                        JsonObject gObj = JsonParser.parseString(resp.body()).getAsJsonObject();
+                        JsonArray candidates = gObj.getAsJsonArray("candidates");
+                        if (candidates != null && candidates.size() > 0) {
+                            JsonArray photos = candidates.get(0).getAsJsonObject().getAsJsonArray("photos");
+                            if (photos != null && photos.size() > 0) {
+                                String ref = photos.get(0).getAsJsonObject().get("photo_reference").getAsString();
+                                thumb = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=" +
+                                        ref + "&key=" + dotenv.get("GOOGLE_MAPS_API_KEY");
+                            }
+                        }
+                    } catch (Exception e) {
+                        thumb = null;
+                    }
+                    if (thumb == null) continue;
+
+                    JsonObject out = new JsonObject();
+                    out.addProperty("name", hName);
+                    out.addProperty("lat", hLat);
+                    out.addProperty("lng", hLng);
+                    out.addProperty("thumbnailUrl", thumb);
+                    out.addProperty("nightlyPrice", price);
+                    hotelsArr.add(out);
+                }
+            } catch (Exception e) {
+                ctx.status(500).result("Failed to get hotels");
+                return;
+            }
+
+            JsonObject response = new JsonObject();
+            response.add("hotels", hotelsArr);
+            response.add("sights", sightsArr);
+
+            ctx.result(response.toString()).contentType("application/json");
         });
 
 
@@ -234,6 +338,55 @@ public class MashupJavalin {
 
 
 
-}}
+    }
 
 
+    public void nearbyAirports(Javalin app) {
+
+        app.get("/mashupJavalin/nearbyAirports", ctx -> {
+
+            String latStr = ctx.queryParam("lat");
+            String lngStr = ctx.queryParam("lng");
+            String radiusStr = ctx.queryParam("radiusKm");
+            String limitStr = ctx.queryParam("limit");
+
+            if (latStr == null || latStr.isBlank() || lngStr == null || lngStr.isBlank()) {
+                ctx.status(400).result("lat and lng must be provided");
+                return;
+            }
+
+            double lat;
+            double lng;
+            try {
+                lat = Double.parseDouble(latStr);
+                lng = Double.parseDouble(lngStr);
+            } catch (NumberFormatException e) {
+                ctx.status(400).result("Invalid coordinates");
+                return;
+            }
+
+            int radiusKm = 200;
+            int limit = 5;
+            if (radiusStr != null && !radiusStr.isBlank()) {
+                try {
+                    radiusKm = Integer.parseInt(radiusStr);
+                } catch (NumberFormatException ignored) {}
+            }
+            if (limitStr != null && !limitStr.isBlank()) {
+                try {
+                    limit = Integer.parseInt(limitStr);
+                } catch (NumberFormatException ignored) {}
+            }
+
+            try {
+                List<Map<String, Object>> airports = amadeusService.getNearbyAirportDetails(lat, lng, radiusKm, limit);
+                ctx.json(airports);
+            } catch (ResponseException e) {
+                ctx.status(502).result("Failed to fetch airports");
+            }
+
+        });
+
+    }
+
+}
