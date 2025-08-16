@@ -9,6 +9,8 @@ import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
 import org.slf4j.Logger;
+import org.example.GoogleMaps.MashupJavalin;
+
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
@@ -75,6 +77,11 @@ public class TripController {
         app.get("/trip-info", TripController::handleTripInfo);
 
         app.get("/nearby-airports", TripController::handleNearbyAirports);
+        MashupJavalin mashup = new MashupJavalin();
+        mashup.flightsAndPolyline(app);
+        mashup.hotelsAndSights(app);
+        mashup.distToHotel(app);
+        mashup.distToAirport(app);
 
     }
 
