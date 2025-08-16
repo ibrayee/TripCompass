@@ -39,8 +39,7 @@ public class RouteInfo { // använder Google maps Distance API
 
         HttpRequest httpRequest =
                 HttpRequest.newBuilder()
-                        .uri(URI.create("https://maps.googleapis.com/maps/api/directions/json?origin=" + encodeStart + "&destination=" + encodeEnd + "&key=" + apiKey))
-                        .build();
+                        .uri(URI.create("https://maps.googleapis.com/maps/api/directions/json?mode=driving&origin=" + encodeStart + "&destination=" + encodeEnd + "&key=" + apiKey))                        .build();
 
         HttpResponse<String> response = null;
         try {

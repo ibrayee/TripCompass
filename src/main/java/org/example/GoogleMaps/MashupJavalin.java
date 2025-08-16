@@ -29,38 +29,51 @@ public class MashupJavalin {
     );
 
 
-    // Polylinjen (google maps)  ritas ut mellan två platser (amadeus)
+    // Polylinjen (google maps) ritas ut mellan två platser (amadeus)
     public void flightsAndPolyline(Javalin app) {
 
         app.get("/mashupJavalin/flightsAndPolyline", ctx -> {
 
             String startPlace = ctx.queryParam("startPlace");
-            String endPlace = ctx.queryParam ("endPlace");
+            String endPlace = ctx.queryParam("endPlace");
 
             if (startPlace == null || startPlace.isBlank() || endPlace == null || endPlace.isBlank()) {
                 ctx.status(400).result("startPlace and endPlace has to be typed");
                 return;
             }
 
-            double[] startCoords =  amadeusService.geocodeCityToCoords(startPlace); //från amadeus
-            double[] endCoords =  amadeusService.geocodeCityToCoords(endPlace);
-
-            if (startCoords == null || endCoords == null) {
+            double[] startCityCoords = amadeusService.geocodeCityToCoords(startPlace);
+            double[] endCityCoords = amadeusService.geocodeCityToCoords(endPlace);
+            if (startCityCoords == null || endCityCoords == null) {
                 ctx.status(404).result("Could not find coordinates for given cities");
                 return;
             }
 
-            String startLngLong = startCoords [0] + "," + startCoords [1]; //omvandlas till strängar
-            String endLngLong = endCoords [0] + "," +  endCoords [1];
+            String startAirport;
+            String endAirport;
+            try {
+                startAirport = amadeusService.getNearestAirport(startCityCoords[0], startCityCoords[1]);
+                endAirport = amadeusService.getNearestAirport(endCityCoords[0], endCityCoords[1]);
+            } catch (ResponseException e) {
+                ctx.status(500).result("Failed to find nearest airports");
+                return;
+            }if (startAirport == null || endAirport == null) {
+                ctx.status(404).result("Could not find airport codes for given cities");
+                return;
+            }
 
-            RouteInfo routeInfo = new RouteInfo(startLngLong, endLngLong); //google använder för att hämta polyline
+            double[] startAirportCoords = amadeusService.geocodeCityToCoords(startAirport);
+            double[] endAirportCoords = amadeusService.geocodeCityToCoords(endAirport);
 
-            routeInfo.fetchRoute();
-            String polyline = routeInfo.getPolyline();
+            if (startAirportCoords == null || endAirportCoords == null) {
+                ctx.status(404).result("Could not geocode airports");
+                return;
+            }
 
+            String polyline = encodePolyline(new double[][]{startAirportCoords, endAirportCoords});
             JsonObject routeObj = new JsonObject();
-            routeObj.addProperty("startPlace", startPlace);
-            routeObj.addProperty("endPlace", endPlace);
+            routeObj.addProperty("startAirport", startAirport);
+            routeObj.addProperty("endAirport", endAirport);
             routeObj.addProperty("polyline", polyline);
 
 
@@ -69,6 +82,33 @@ public class MashupJavalin {
 
         });
 
+    }
+    private static String encodePolyline(double[][] coords) {
+        StringBuilder result = new StringBuilder();
+        long lastLat = 0;
+        long lastLng = 0;
+        for (double[] coord : coords) {
+            long lat = Math.round(coord[0] * 1e5);
+            long lng = Math.round(coord[1] * 1e5);
+            long dLat = lat - lastLat;
+            long dLng = lng - lastLng;
+            encode(dLat, result);
+            encode(dLng, result);
+            lastLat = lat;
+            lastLng = lng;
+        }
+        return result.toString();
+    }
+
+    private static void encode(long value, StringBuilder sb) {
+        value <<= 1;
+        if (value < 0) value = ~value;
+        while (value >= 0x20) {
+            int next = (int) ((0x20 | (value & 0x1f)) + 63);
+            sb.append((char) next);
+            value >>= 5;
+        }
+        sb.append((char) (value + 63));
     }
 
 

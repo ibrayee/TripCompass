@@ -14,6 +14,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fallback: attempt to fetch immediately if no form present
         fetchHotels();
     }
+
+    const closeBtn = document.getElementById('close-sidebar');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            document.getElementById('sidebar').classList.add('hidden');
+        });
+    }
 });
 
 let allHotelData = [];
@@ -24,7 +31,7 @@ async function fetchHotels() {
     const destination = document.getElementById('destination')?.value.trim() || '';
     const checkInDate = document.getElementById('checkInDate')?.value || '';
     const adults = document.getElementById('adults')?.value || '1';
-    const rooms = document.getElementById('roomQuantity')?.value || '1';
+    const rooms = document.getElementById('rooms')?.value || '1';
 
     // Reset pagination and data for each new search
     allHotelData = [];
@@ -33,7 +40,8 @@ async function fetchHotels() {
     // Show loading state
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '<div class="loading-spinner"></div>';
-    
+    if (typeof clearMap === 'function') clearMap();
+
     try {
         const keyRes = await fetch('/config/maps-key');
         if (!keyRes.ok) throw new Error('Failed to load Maps API key');
@@ -69,7 +77,9 @@ async function fetchHotels() {
         
         allHotelData.push(...data.offers);
         renderNextHotels();
-        
+        plotHotelsOnMap(data.offers);
+        document.getElementById('sidebar').classList.remove('hidden');
+
         if (allHotelData.length > limit) {
             document.getElementById('loadMore').style.display = 'block';
         }
@@ -94,11 +104,13 @@ function renderNextHotels() {
         const hotelData = hotelObj.offers[0];
         const hotel = hotelData.hotel;
         const offer = hotelData.offers[0];
-        
+        const imageUrl = hotel.media?.[0]?.uri || 'https://via.placeholder.com/150?text=No+Image';
+
         const div = document.createElement('div');
         div.className = 'hotel-card';
         
         div.innerHTML = `
+            <img src="${imageUrl}" alt="${hotel.name}" class="hotel-thumb">
             <h3>${hotel.name}</h3>
             <p>${hotel.address?.lines?.join(', ') || ''}</p>
             <p>${hotel.address?.cityName || ''}, ${hotel.address?.countryCode || ''}</p>
@@ -120,4 +132,26 @@ function renderNextHotels() {
     if (offset >= allHotelData.length) {
         document.getElementById('loadMore').style.display = 'none';
     }
-}
+
+    function plotHotelsOnMap(hotels) {
+        if (!Array.isArray(hotels) || typeof google === 'undefined' || !map) return;
+        const bounds = new google.maps.LatLngBounds();
+        hotels.forEach(hotelObj => {
+            const hotelData = hotelObj.offers?.[0];
+            const hotel = hotelData?.hotel || {};
+            const lat = hotel.geoCode?.latitude || hotel.latitude;
+            const lng = hotel.geoCode?.longitude || hotel.longitude;
+            if (lat && lng) {
+                const marker = new google.maps.Marker({
+                    position: { lat: parseFloat(lat), lng: parseFloat(lng) },
+                    map,
+                    title: hotel.name || 'Hotel'
+                });
+                if (typeof markers !== 'undefined') markers.push(marker);
+                bounds.extend(marker.getPosition());
+            }
+        });
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds);
+        }
+}}
