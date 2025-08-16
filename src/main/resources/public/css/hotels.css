@@ -41,3 +41,6 @@ h1 {
     border: none;
     border-radius: var(--radius);
 }
+/*
+ * Hotel page-specific overrides can be added here if needed.
+ */

@@ -6,9 +6,11 @@ fetch('/config/maps-key')
         return res.json();
     })
     .then(data => {
+        const callback = window.initMap ? 'initMap' : (window.initAutocomplete ? 'initAutocomplete' : '');
+
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&callback=initMap&libraries=marker`;
-        script.async = true;
+        const callbackParam = callback ? `&callback=${callback}` : '';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}${callbackParam}&libraries=places,marker`;        script.async = true;
         script.defer = true;
         document.head.appendChild(script);
     })

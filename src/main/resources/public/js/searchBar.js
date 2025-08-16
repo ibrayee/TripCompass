@@ -1,6 +1,6 @@
 function searchCity() {
-    const destination = document.getElementById('city-input').value.trim();
-    if (!destination) {
+    const destinationInput = document.getElementById('city-input');
+    const destination = destinationInput.value.trim();    if (!destination) {
         alert('Please enter a destination city');
         return;
     }
@@ -14,7 +14,15 @@ function searchCity() {
     searchBtnSpinner.classList.remove('hidden');
     searchBtnText.textContent = 'Searching...';
 
-    // Geocode destination
+    const lat = destinationInput.dataset.lat;
+    const lng = destinationInput.dataset.lng;
+
+    if (lat && lng) {
+        requestTripInfo(parseFloat(lat), parseFloat(lng));
+        return;
+    }
+
+    // Geocode destination if no autocomplete data
     geocoder.geocode({ address: destination }, (results, status) => {
         if (status === 'OK' && results[0]) {
             const location = results[0].geometry.location;
@@ -25,6 +33,9 @@ function searchCity() {
         } else {
             alert(`Could not find location: ${status}`);
             hideSidebar();
+            loadingIndicator.classList.add('hidden');
+            searchBtnSpinner.classList.add('hidden');
+            searchBtnText.textContent = 'Search';
         }
     }).finally(() => {
         // Reset loading indicators regardless of success or failure
