@@ -145,22 +145,57 @@ public class TripInfoService {
 
         // 5. Simplify flight offers (limit to top 3)
         JsonArray simplifiedFlights = new JsonArray();
+        Set<String> seenFlights = new HashSet<>();
         for (var offerElement : flightArray) {
             JsonObject offer = offerElement.getAsJsonObject();
             JsonObject itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
-            JsonObject segment   = itinerary.getAsJsonArray("segments").get(0).getAsJsonObject();
-            JsonObject dep       = segment.getAsJsonObject("departure");
-            JsonObject arr       = segment.getAsJsonObject("arrival");
+            var segments = itinerary.getAsJsonArray("segments");
+            JsonObject firstSegment = segments.get(0).getAsJsonObject();
+            JsonObject lastSegment = segments.get(segments.size() - 1).getAsJsonObject();
+            JsonObject dep = firstSegment.getAsJsonObject("departure");
+            JsonObject arr = lastSegment.getAsJsonObject("arrival");
 
+            String originCode = dep.get("iataCode").getAsString();
+            String destCode = arr.get("iataCode").getAsString();
+            String depTime = dep.get("at").getAsString();
+            String key = originCode + destCode + depTime;
+            if (seenFlights.contains(key)) {
+                continue;
+            }
+            seenFlights.add(key);
             JsonObject simple = new JsonObject();
-            simple.addProperty("origin", dep.get("iataCode").getAsString());
-            simple.addProperty("destination", arr.get("iataCode").getAsString());
-            simple.addProperty("departure", dep.get("at").getAsString());
+            simple.addProperty("origin", originCode);
+            simple.addProperty("destination", destCode);
+            simple.addProperty("departure", depTime);
             simple.addProperty("arrival", arr.get("at").getAsString());
             simple.addProperty("duration", itinerary.get("duration").getAsString());
             simple.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
             simple.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-            simple.addProperty("airline", segment.get("carrierCode").getAsString());
+            simple.addProperty("airline", firstSegment.get("carrierCode").getAsString());
+
+            JsonArray legs = new JsonArray();
+            JsonArray stopovers = new JsonArray();
+            for (int i = 0; i < segments.size(); i++) {
+                JsonObject seg = segments.get(i).getAsJsonObject();
+                JsonObject segDep = seg.getAsJsonObject("departure");
+                JsonObject segArr = seg.getAsJsonObject("arrival");
+
+                JsonObject leg = new JsonObject();
+                leg.addProperty("origin", segDep.get("iataCode").getAsString());
+                leg.addProperty("destination", segArr.get("iataCode").getAsString());
+                leg.addProperty("departure", segDep.get("at").getAsString());
+                leg.addProperty("arrival", segArr.get("at").getAsString());
+                leg.addProperty("airline", seg.get("carrierCode").getAsString());
+                legs.add(leg);
+
+                if (i < segments.size() - 1) {
+                    stopovers.add(segArr.get("iataCode").getAsString());
+                }
+            }
+            simple.add("segments", legs);
+            if (stopovers.size() > 0) {
+                simple.add("stopovers", stopovers);
+            }
 
             simplifiedFlights.add(simple);
             if (simplifiedFlights.size() >= 3) break;

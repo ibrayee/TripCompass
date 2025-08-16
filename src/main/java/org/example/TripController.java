@@ -220,11 +220,11 @@ public class TripController {
                 var offer = offerElement.getAsJsonObject();
 
                 var itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
-                var segment = itinerary.getAsJsonArray("segments").get(0).getAsJsonObject();
-
-                var departure = segment.getAsJsonObject("departure");
-                var arrival = segment.getAsJsonObject("arrival");
-
+                var segments = itinerary.getAsJsonArray("segments");
+                var firstSegment = segments.get(0).getAsJsonObject();
+                var lastSegment = segments.get(segments.size() - 1).getAsJsonObject();
+                var departure = firstSegment.getAsJsonObject("departure");
+                var arrival = lastSegment.getAsJsonObject("arrival");
                 JsonObject simplified = new JsonObject();
                 simplified.addProperty("origin", departure.get("iataCode").getAsString());
                 simplified.addProperty("destination", arrival.get("iataCode").getAsString());
@@ -233,9 +233,31 @@ public class TripController {
                 simplified.addProperty("duration", itinerary.get("duration").getAsString());
                 simplified.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
                 simplified.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-                simplified.addProperty("airline", segment.get("carrierCode").getAsString());
+                simplified.addProperty("airline", firstSegment.get("carrierCode").getAsString());
 
-                simplifiedArray.add(simplified);
+                JsonArray legs = new JsonArray();
+                JsonArray stopovers = new JsonArray();
+                for (int i = 0; i < segments.size(); i++) {
+                    var seg = segments.get(i).getAsJsonObject();
+                    var segDep = seg.getAsJsonObject("departure");
+                    var segArr = seg.getAsJsonObject("arrival");
+
+                    JsonObject leg = new JsonObject();
+                    leg.addProperty("origin", segDep.get("iataCode").getAsString());
+                    leg.addProperty("destination", segArr.get("iataCode").getAsString());
+                    leg.addProperty("departure", segDep.get("at").getAsString());
+                    leg.addProperty("arrival", segArr.get("at").getAsString());
+                    leg.addProperty("airline", seg.get("carrierCode").getAsString());
+                    legs.add(leg);
+
+                    if (i < segments.size() - 1) {
+                        stopovers.add(segArr.get("iataCode").getAsString());
+                    }
+                }
+                simplified.add("segments", legs);
+                if (stopovers.size() > 0) {
+                    simplified.add("stopovers", stopovers);
+                }                simplifiedArray.add(simplified);
             }
 
             ctx.contentType("application/json");
