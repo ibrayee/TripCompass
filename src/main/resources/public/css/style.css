@@ -45,7 +45,7 @@ img {
 nav {
   background-color: var(--white);
   box-shadow: var(--shadow);
-  padding: 1rem 2rem;
+  padding: 2.5rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -55,14 +55,15 @@ nav {
 }
 
 .icon {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: 666;
   color: var(--primary-color);
 }
 
 .navitem {
   display: flex;
   gap: 2rem;
+  font-size: 1.2rem;
   list-style: none;
 }
 
@@ -85,12 +86,12 @@ nav {
 
 #search-bar {
   position: absolute;
-  top: 1.5rem;
+  top: 2.5rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
   background: var(--white);
-  padding: 1rem 1.5rem;
+  padding: 1.2rem 1.5rem;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   display: flex;
