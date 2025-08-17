@@ -26,6 +26,29 @@ document.addEventListener('DOMContentLoaded', () => {
 let allHotelData = [];
 let offset = 0;
 const limit = 3;
+function plotHotelsOnMap(hotels) {
+    if (!Array.isArray(hotels) || typeof google === 'undefined' || !map) return;
+    const bounds = new google.maps.LatLngBounds();
+    hotels.forEach(hotelObj => {
+        const hotelData = hotelObj.offers?.[0];
+        const hotel = hotelData?.hotel || {};
+        const lat = hotel.geoCode?.latitude || hotel.latitude;
+        const lng = hotel.geoCode?.longitude || hotel.longitude;
+        if (lat && lng) {
+            const marker = new google.maps.Marker({
+                position: { lat: parseFloat(lat), lng: parseFloat(lng) },
+                map,
+                title: hotel.name || 'Hotel'
+            });
+            if (typeof markers !== 'undefined') markers.push(marker);
+            bounds.extend(marker.getPosition());
+        }
+    });
+    if (!bounds.isEmpty()) {
+        map.fitBounds(bounds);
+    }
+}
+
 
 async function fetchHotels() {
     const destination = document.getElementById('destination')?.value.trim() || '';
@@ -77,7 +100,7 @@ async function fetchHotels() {
         
         allHotelData.push(...data.offers);
         renderNextHotels();
-        plotHotelsOnMap(data.offers);
+        plotHotelsOnMap(allHotelData.slice(0, limit));
         document.getElementById('sidebar').classList.remove('hidden');
 
         if (allHotelData.length > limit) {
@@ -99,7 +122,7 @@ function renderNextHotels() {
     const container = document.getElementById('results');
     const nextHotels = allHotelData.slice(offset, offset + limit);
     offset += limit;
-    
+
     nextHotels.forEach(hotelObj => {
         const hotelData = hotelObj.offers[0];
         const hotel = hotelData.hotel;
@@ -108,7 +131,7 @@ function renderNextHotels() {
 
         const div = document.createElement('div');
         div.className = 'hotel-card';
-        
+
         div.innerHTML = `
             <img src="${imageUrl}" alt="${hotel.name}" class="hotel-thumb">
             <h3>${hotel.name}</h3>
@@ -125,33 +148,14 @@ function renderNextHotels() {
             <span class="price-tag">${offer.price.total} ${offer.price.currency}</span>
             <button class="btn-secondary">View Details & Book</button>
         `;
-        
+
         container.appendChild(div);
     });
-    
+    if (offset > limit) {
+        plotHotelsOnMap(nextHotels);
+    }
     if (offset >= allHotelData.length) {
         document.getElementById('loadMore').style.display = 'none';
     }
 
-    function plotHotelsOnMap(hotels) {
-        if (!Array.isArray(hotels) || typeof google === 'undefined' || !map) return;
-        const bounds = new google.maps.LatLngBounds();
-        hotels.forEach(hotelObj => {
-            const hotelData = hotelObj.offers?.[0];
-            const hotel = hotelData?.hotel || {};
-            const lat = hotel.geoCode?.latitude || hotel.latitude;
-            const lng = hotel.geoCode?.longitude || hotel.longitude;
-            if (lat && lng) {
-                const marker = new google.maps.Marker({
-                    position: { lat: parseFloat(lat), lng: parseFloat(lng) },
-                    map,
-                    title: hotel.name || 'Hotel'
-                });
-                if (typeof markers !== 'undefined') markers.push(marker);
-                bounds.extend(marker.getPosition());
-            }
-        });
-        if (!bounds.isEmpty()) {
-            map.fitBounds(bounds);
-        }
-}}
+}

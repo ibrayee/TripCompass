@@ -1,12 +1,6 @@
 let map;
 let polylines = [];
 let markers = [];
-const airportSelect = document.getElementById('airport-select');
-let airportData = [];
-let currentEnd = null;
-let airportRoutePolyline = null;
-let planeMarker = null;
-airportSelect.disabled = true;
 const PLACEHOLDER_IMG = 'https://via.placeholder.com/100x75?text=No+Image';
 
 function initMap() {
@@ -25,10 +19,7 @@ function clearMap() {
     markers.forEach(m => m.setMap(null));
     markers = [];
 }
-function clearAirportRoute() {
-    airportRoutePolyline?.setMap(null);
-    planeMarker?.setMap(null);
-}
+
 function normalizeHotel(hotel) {
     return {
         name: hotel.name || hotel.hotelName || hotel.hotel?.name || 'Unknown Hotel',
@@ -105,6 +96,12 @@ if (mashupForm) {
         const end = document.getElementById('end-city').value.trim();
         const hotel = document.getElementById('hotel-name').value.trim();
         const placeType = document.getElementById('place-type').value.trim();
+        const checkInDateInput = document.getElementById('check-in-date');
+        const adultsInput = document.getElementById('adults');
+        const roomQuantityInput = document.getElementById('room-quantity');
+        const checkInDate = checkInDateInput?.value || new Date().toISOString().split('T')[0];
+        const adults = adultsInput?.value || '1';
+        const roomQuantity = roomQuantityInput?.value || '1';
         const resultDiv = document.getElementById('results');
         resultDiv.innerHTML = '';
         const oldSidebar = document.getElementById('hotel-sidebar');
@@ -128,8 +125,8 @@ if (mashupForm) {
         if (placeType && (hotel || end)) {
             try {
                 const query = hotel ? `hotelName=${encodeURIComponent(hotel)}` : `city=${encodeURIComponent(end)}`;
-                const res = await fetch(`/mashupJavalin/hotelsAndSights?${query}&placeType=${encodeURIComponent(placeType)}`);
-                if (res.ok) {
+                const url = `/mashupJavalin/hotelsAndSights?${query}&placeType=${encodeURIComponent(placeType)}&checkInDate=${encodeURIComponent(checkInDate)}&adults=${encodeURIComponent(adults)}&roomQuantity=${encodeURIComponent(roomQuantity)}`;
+                const res = await fetch(url);                if (res.ok) {
                     const data = await res.json();
                     const hotels = Array.isArray(data) ? data : (data.hotels || []);
                     if (hotels.length) {
@@ -195,33 +192,6 @@ if (mashupForm) {
                 console.error(err);
                 resultDiv.innerHTML += '<p>Error loading distance to airport.</p>';
             }
-        }
-    });
-}
-
-const airportSelect = document.getElementById('airport-select');
-if (airportSelect) {
-    airportSelect.addEventListener('change', async (e) => {
-        clearAirportRoute();
-        const idx = e.target.value;
-        if (idx === '') return;
-        const airport = airportData[idx];
-        if (!airport || !currentEnd) return;
-        try {
-            const res = await fetch(`/mashupJavalin/flightsAndPolyline?startPlace=${encodeURIComponent(airport.iata)}&endPlace=${encodeURIComponent(currentEnd)}`);
-            if (res.ok) {
-                const data = await res.json();
-                const { poly, path } = drawPolyline(data.polyline, '#FFA500');
-                airportRoutePolyline = poly;
-                const mid = path[Math.floor(path.length / 2)];
-                planeMarker = new google.maps.Marker({
-                    position: mid,
-                    map,
-                    label: '✈'
-                });
-                markers.push(planeMarker);
-        } }catch (err) {
-            console.error(err);
         }
     });
 }

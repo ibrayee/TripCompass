@@ -174,6 +174,9 @@ public class MashupJavalin {
 
                 HttpClient client = HttpClient.newHttpClient();
                 String checkInDate = ctx.queryParam("checkInDate");
+                if (checkInDate == null || checkInDate.isBlank()) {
+                    checkInDate = LocalDate.now().plusDays(1).toString();
+                }
                 int adults = 1;
                 try { adults = Integer.parseInt(ctx.queryParam("adults")); } catch (Exception ignored) {}
                 int rooms = 1;

@@ -20,12 +20,12 @@
     <div id="map" style="height:500px;"></div>
     <form id="mashup-form">
         <input type="text" id="start-city" placeholder="Start city or airport">
-        <select id="airport-select">
-            <option value="">Select an airport</option>
-        </select>
         <input type="text" id="end-city" placeholder="End city">
         <input type="text" id="hotel-name" placeholder="Hotel (optional)">
         <input type="text" id="place-type" placeholder="Place type (e.g. museum)">
+        <input type="date" id="check-in-date" placeholder="Check-in date">
+        <input type="number" id="adults" min="1" value="1" placeholder="Adults">
+        <input type="number" id="room-quantity" min="1" value="1" placeholder="Rooms">
         <button type="submit" class="btn-primary">Show Trip</button>
     </form>
     <div id="results"></div>
