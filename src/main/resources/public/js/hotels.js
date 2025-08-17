@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let allHotelData = [];
 let offset = 0;
-const limit = 3;
+let limit = 5;
 function plotHotelsOnMap(hotels) {
     if (!Array.isArray(hotels) || typeof google === 'undefined' || !map) return;
     const bounds = new google.maps.LatLngBounds();
@@ -48,8 +48,8 @@ async function fetchHotels() {
     const checkInDate = document.getElementById('checkInDate')?.value || '';
     const adults = document.getElementById('adults')?.value || '1';
     const rooms = document.getElementById('rooms')?.value || '1';
+    limit = parseInt(document.getElementById('limit')?.value, 10) || limit;
 
-    // Reset paginazione
     allHotelData = [];
     offset = 0;
 
@@ -80,8 +80,7 @@ async function fetchHotels() {
         const { lat, lng } = geoData.results[0].geometry.location;
 
         // 3) Backend search
-        const url = `/search/nearby?lat=${lat}&lng=${lng}&checkInDate=${encodeURIComponent(checkInDate)}&adults=${encodeURIComponent(adults)}&roomQuantity=${encodeURIComponent(rooms)}`;
-        response = await fetch(url);
+        const url = `/search/nearby?lat=${lat}&lng=${lng}&checkInDate=${encodeURIComponent(checkInDate)}&adults=${encodeURIComponent(adults)}&roomQuantity=${encodeURIComponent(rooms)}&limit=${limit}`;        response = await fetch(url);
         if (!response.ok) throw new Error(`Server error: ${response.status}`);
 
         data = await response.json();
@@ -112,6 +111,8 @@ async function fetchHotels() {
 
         if (loadMoreEl && allHotelData.length > limit) {
             loadMoreEl.style.display = 'block';
+        } else if (loadMoreEl) {
+            loadMoreEl.style.display = 'none';
         }
 
     } catch (err) {
@@ -133,7 +134,7 @@ async function fetchHotels() {
 function renderNextHotels() {
     const container = document.getElementById('results');
     const nextHotels = allHotelData.slice(offset, offset + limit);
-    offset += limit;
+    offset += nextHotels.length;
 
     nextHotels.forEach(hotelObj => {
         const hotelData = hotelObj.offers[0];
@@ -166,8 +167,9 @@ function renderNextHotels() {
     if (offset > limit) {
         plotHotelsOnMap(nextHotels);
     }
-    if (offset >= allHotelData.length) {
-        document.getElementById('loadMore').style.display = 'none';
+    if (offset >= allHotelData.length || nextHotels.length < limit) {
+        const btn = document.getElementById('loadMore');
+        if (btn) btn.style.display = 'none';
     }
 
 }
