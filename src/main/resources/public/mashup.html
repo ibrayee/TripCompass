@@ -6,6 +6,9 @@
     <title>Mashup TripCompass</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/loading.css">
+    <link rel="stylesheet" href="css/flights.css">
+    <link rel="stylesheet" href="css/hotels.css">
+    <link rel="stylesheet" href="css/components.css">
 </head>
 <body>
 <nav>
@@ -18,22 +21,55 @@
     </ul>
 </nav>
 <div class="container">
+    <header class="page-header">
+        <h1>✈️ Flights & Hotels</h1>
+        <p>Search flights and optionally hotels for your trip</p>
+    </header>
+    <div class="search-card">
+        <form id="mashup-form">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="origin">From</label>
+                    <input type="text" id="origin" placeholder="e.g. JFK" required>
+                </div>
+                <div class="form-group">
+                    <label for="destination">To</label>
+                    <input type="text" id="destination" placeholder="e.g. LHR" required>
+                </div>
+                <div class="form-group">
+                    <label for="departureDate">Departure Date</label>
+                    <input type="date" id="departureDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="adults">Passengers</label>
+                    <input type="number" id="adults" min="1" value="1" required>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="includeHotels">
+                    <label for="includeHotels">Search for hotels</label>
+                </div>
+            </div>
+            <button type="submit" class="btn-primary" id="mashup-search-btn">
+                <span>Search</span>
+                <div class="spinner hidden"></div>
+            </button>
+        </form>
+    </div>
     <div id="map" style="height:500px;"></div>
-    <form id="mashup-form">
-        <input type="text" id="start-city" placeholder="Start city or airport">
-        <input type="text" id="end-city" placeholder="End city">
-        <input type="text" id="hotel-name" placeholder="Hotel (optional)">
-        <input type="text" id="place-type" placeholder="Place type (e.g. museum)">
-        <input type="date" id="check-in-date" placeholder="Check-in date">
-        <input type="number" id="adults" min="1" value="1" placeholder="Adults">
-        <input type="number" id="room-quantity" min="1" value="1" placeholder="Rooms">
-        <button type="submit" class="btn-primary">Show Trip</button>
-    </form>
-    <div id="results"></div>
+    <div class="results-container">
+        <h2 class="results-header">Available Flights</h2>
+        <div id="flight-results"></div>
+    </div>
+
+    <div class="results-container" id="hotel-section" style="display:none;">
+        <h2 class="results-header">Available Hotels</h2>
+        <div id="hotel-results"></div>
+    </div>
 </div>
 <div id="loading-overlay" class="hidden"><div class="spinner"></div></div>
+<script src="js/autocomplete.js"></script>
+<script src="js/loadGoogleMaps.js"></script>
 <script type="module" src="js/loading.js"></script>
 <script src="js/mashup.js"></script>
-<script src="js/loadGoogleMaps.js"></script>
 </body>
 </html>
