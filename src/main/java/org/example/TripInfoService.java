@@ -33,14 +33,25 @@ public class TripInfoService {
             int adults,
             int rooms
     ) throws ResponseException {
+        return getTripInfo(lat, lng, originCity, checkInDate, adults, rooms, 10);
+    }
+
+    public Map<String, Object> getTripInfo(
+            double lat,
+            double lng,
+            String originCity,
+            String checkInDate,
+            int adults,
+            int rooms,
+            int maxFlights
+    ) throws ResponseException {
         double[] originCoords = amadeusService.geocodeCityToCoords(originCity);
         if (originCoords == null) throw new IllegalArgumentException("Could not geolocate origin city");
 
         String originAirport = amadeusService.getNearestAirport(originCoords[0], originCoords[1]);
         if (originAirport == null) throw new IllegalStateException("No origin airport found");
 
-        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms);
-    }
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms, maxFlights);    }
 
     /**
      * Fetches combined trip information when origin coordinates and/or airport are already known.
@@ -55,13 +66,26 @@ public class TripInfoService {
             int adults,
             int rooms
     ) throws ResponseException {
+        return getTripInfo(lat, lng, originAirport, originLat, originLng, checkInDate, adults, rooms, 10);
+    }
+
+    public Map<String, Object> getTripInfo(
+            double lat,
+            double lng,
+            String originAirport,
+            double originLat,
+            double originLng,
+            String checkInDate,
+            int adults,
+            int rooms,
+            int maxFlights
+    ) throws ResponseException {
         double[] originCoords = new double[]{originLat, originLng};
         if (originAirport == null || originAirport.isBlank()) {
             originAirport = amadeusService.getNearestAirport(originLat, originLng);
             if (originAirport == null) throw new IllegalStateException("No origin airport found");
         }
-        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms);
-    }
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms, maxFlights);    }
 
     private Map<String, Object> getTripInfoInternal(
             double lat,
@@ -70,7 +94,8 @@ public class TripInfoService {
             double[] originCoords,
             String checkInDate,
             int adults,
-            int rooms
+            int rooms,
+            int maxFlights
     ) throws ResponseException {
         System.out.println("STARTING TRIP INFO...");
         System.out.println("Lat: " + lat + ", Lng: " + lng);
@@ -146,6 +171,8 @@ public class TripInfoService {
         // 5. Simplify flight offers (limit to top 3)
         JsonArray simplifiedFlights = new JsonArray();
         Set<String> seenFlights = new HashSet<>();
+        Set<String> carrierCodes = new HashSet<>();
+
         for (var offerElement : flightArray) {
             JsonObject offer = offerElement.getAsJsonObject();
             JsonObject itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
@@ -171,7 +198,10 @@ public class TripInfoService {
             simple.addProperty("duration", itinerary.get("duration").getAsString());
             simple.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
             simple.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-            simple.addProperty("airline", firstSegment.get("carrierCode").getAsString());
+            String topCode = firstSegment.get("carrierCode").getAsString();
+            carrierCodes.add(topCode);
+            simple.addProperty("airlineCode", topCode);
+            simple.addProperty("airline", topCode);
 
             JsonArray legs = new JsonArray();
             JsonArray stopovers = new JsonArray();
@@ -185,7 +215,10 @@ public class TripInfoService {
                 leg.addProperty("destination", segArr.get("iataCode").getAsString());
                 leg.addProperty("departure", segDep.get("at").getAsString());
                 leg.addProperty("arrival", segArr.get("at").getAsString());
-                leg.addProperty("airline", seg.get("carrierCode").getAsString());
+                String segCode = seg.get("carrierCode").getAsString();
+                carrierCodes.add(segCode);
+                leg.addProperty("airlineCode", segCode);
+                leg.addProperty("airline", segCode);
                 legs.add(leg);
 
                 if (i < segments.size() - 1) {
@@ -198,8 +231,19 @@ public class TripInfoService {
             }
 
             simplifiedFlights.add(simple);
-            if (simplifiedFlights.size() >= 3) break;
+            if (simplifiedFlights.size() >= maxFlights) break;
         }
+        Map<String, String> names = amadeusService.getAirlineNames(new ArrayList<>(carrierCodes));
+        for (var element : simplifiedFlights) {
+            JsonObject flight = element.getAsJsonObject();
+            String code = flight.get("airlineCode").getAsString();
+            flight.addProperty("airline", names.getOrDefault(code, code));
+            JsonArray legs = flight.getAsJsonArray("segments");
+            for (var legEl : legs) {
+                JsonObject leg = legEl.getAsJsonObject();
+                String lCode = leg.get("airlineCode").getAsString();
+                leg.addProperty("airline", names.getOrDefault(lCode, lCode));
+            }        }
         Object simplifiedFlightObject = new Gson().fromJson(simplifiedFlights, Object.class);
         // 6. Assemble response
         Map<String, Object> response = new HashMap<>();

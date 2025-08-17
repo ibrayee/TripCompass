@@ -13,11 +13,7 @@ import org.example.GoogleMaps.MashupJavalin;
 
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import java.util.*;
 
 
 /**
@@ -101,6 +97,8 @@ public class TripController {
         String checkInDate = ctx.queryParam("checkInDate");
         String adultsStr = ctx.queryParam("adults");
         String roomQuantityStr = ctx.queryParam("roomQuantity");
+        String maxFlightsStr = ctx.queryParam("maxFlights");
+
 
         boolean hasOriginCoords = originLatStr != null && originLngStr != null
                 && ValidationUtils.isValidCoordinates(originLatStr, originLngStr);
@@ -123,7 +121,10 @@ public class TripController {
             double lng = Double.parseDouble(lngStr.trim().replace(",", "."));
             int adults = Integer.parseInt(adultsStr.trim());
             int rooms = Integer.parseInt(roomQuantityStr.trim());
-
+            int maxFlights = 10;
+            if (maxFlightsStr != null && ValidationUtils.isPositiveInteger(maxFlightsStr)) {
+                maxFlights = Integer.parseInt(maxFlightsStr.trim());
+            }
             double oLat = 0;
             double oLng = 0;
             if (hasOriginCoords) {
@@ -149,11 +150,11 @@ public class TripController {
             Map<String, Object> result;
             if (hasOriginCoords) {
                 result = tripInfoService.getTripInfo(
-                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, adults, rooms
+                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, adults, rooms, maxFlights
                 );
             } else {
                 result = tripInfoService.getTripInfo(
-                        lat, lng, resolvedOrigin, checkInDate, adults, rooms
+                        lat, lng, resolvedOrigin, checkInDate, adults, rooms, maxFlights
                 );
             }
 
@@ -210,6 +211,7 @@ public class TripController {
         String departureDate = ctx.queryParam("departureDate");
         String returnDate = ctx.queryParam("returnDate");
         String adultsStr = ctx.queryParam("adults");
+        String limitStr = ctx.queryParam("limit");
 
         if (origin == null || destination == null || departureDate == null || !ValidationUtils.isPositiveInteger(adultsStr)) {
             logger.warn("Invalid parameters for flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
@@ -226,15 +228,22 @@ public class TripController {
         }
 
         int adults = Integer.parseInt(adultsStr);
-
+        int limit = 10;
+        if (limitStr != null) {
+            try {
+                limit = Integer.parseInt(limitStr);
+            } catch (NumberFormatException ignored) {}
+        }
         try {
             String flightsJson = amadeusService.getFlightOffers(origin, destination, departureDate, returnDate, adults);
             JsonArray originalArray = JsonParser.parseString(flightsJson).getAsJsonArray();
 
             JsonArray simplifiedArray = new JsonArray();
+            Set<String> carrierCodes = new HashSet<>();
 
-            for (var offerElement : originalArray) {
-                var offer = offerElement.getAsJsonObject();
+            int count = Math.min(originalArray.size(), limit);
+            for (int idx = 0; idx < count; idx++) {
+                var offer = originalArray.get(idx).getAsJsonObject();
 
                 var itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
                 var segments = itinerary.getAsJsonArray("segments");
@@ -250,8 +259,10 @@ public class TripController {
                 simplified.addProperty("duration", itinerary.get("duration").getAsString());
                 simplified.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
                 simplified.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-                simplified.addProperty("airline", firstSegment.get("carrierCode").getAsString());
-
+                String topCode = firstSegment.get("carrierCode").getAsString();
+                carrierCodes.add(topCode);
+                simplified.addProperty("airlineCode", topCode);
+                simplified.addProperty("airline", topCode);
                 JsonArray legs = new JsonArray();
                 JsonArray stopovers = new JsonArray();
                 for (int i = 0; i < segments.size(); i++) {
@@ -264,7 +275,10 @@ public class TripController {
                     leg.addProperty("destination", segArr.get("iataCode").getAsString());
                     leg.addProperty("departure", segDep.get("at").getAsString());
                     leg.addProperty("arrival", segArr.get("at").getAsString());
-                    leg.addProperty("airline", seg.get("carrierCode").getAsString());
+                    String segCode = seg.get("carrierCode").getAsString();
+                    carrierCodes.add(segCode);
+                    leg.addProperty("airlineCode", segCode);
+                    leg.addProperty("airline", segCode);
                     legs.add(leg);
 
                     if (i < segments.size() - 1) {
@@ -277,6 +291,18 @@ public class TripController {
                 }
                 simplifiedArray.add(simplified);
             }
+            Map<String, String> names = amadeusService.getAirlineNames(new ArrayList<>(carrierCodes));
+            for (var element : simplifiedArray) {
+                JsonObject flight = element.getAsJsonObject();
+                String code = flight.get("airlineCode").getAsString();
+                flight.addProperty("airline", names.getOrDefault(code, code));
+                JsonArray legs = flight.getAsJsonArray("segments");
+                for (var legEl : legs) {
+                    JsonObject leg = legEl.getAsJsonObject();
+                    String lCode = leg.get("airlineCode").getAsString();
+                    leg.addProperty("airline", names.getOrDefault(lCode, lCode));
+                }
+            }
 
             ctx.contentType("application/json");
             ctx.result(new Gson().toJson(simplifiedArray));
@@ -284,11 +310,13 @@ public class TripController {
             logger.error(
                     "Amadeus API error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
                     origin, destination, departureDate, returnDate, adults, e);
-            ctx.status(Integer.parseInt(e.getCode())).json(Map.of("error", e.getMessage()));        } catch (Exception e) {
-            logger.error(
+            ctx.status(Integer.parseInt(e.getCode())).json(Map.of("error", e.getMessage()));
+        } catch (Exception e) {            logger.error(
                     "Unexpected error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
                     origin, destination, departureDate, returnDate, adults, e);
-            ctx.status(500).json(Map.of("error", "Internal Server Error"));    }}
+            ctx.status(500).json(Map.of("error", "Internal Server Error"));
+        }
+    }
 
 
 

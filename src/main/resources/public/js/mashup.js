@@ -1,7 +1,7 @@
 let map;
-let polylines = [];
 let markers = [];
-const PLACEHOLDER_IMG = 'https://via.placeholder.com/100x75?text=No+Image';
+let polylines = [];
+const PLACEHOLDER_IMG = 'https://via.placeholder.com/150?text=No+Image';
 
 function initMap() {
     map = new google.maps.Map(document.getElementById('map'), {
@@ -20,195 +20,6 @@ function clearMap() {
     markers = [];
 }
 
-function normalizeHotel(hotel) {
-    return {
-        name: hotel.name || hotel.hotelName || hotel.hotel?.name || 'Unknown Hotel',
-        address: hotel.address || hotel.vicinity || hotel.hotel?.address?.lines?.join(', ') || '',
-        price: hotel.price || hotel.price?.total || hotel.offer?.price?.total || '',
-        lat: hotel.lat || hotel.latitude || hotel.geoCode?.latitude || hotel.coordinates?.lat,
-        lng: hotel.lng || hotel.longitude || hotel.geoCode?.longitude || hotel.coordinates?.lng,
-        image: hotel.image || hotel.imageUrl || hotel.photo || (hotel.media && hotel.media[0]?.url) || ''
-    };
-}
-
-function renderHotels(hotels) {
-    let sidebar = document.getElementById('hotel-sidebar');
-    if (!sidebar) {
-        sidebar = document.createElement('div');
-        sidebar.id = 'hotel-sidebar';
-        sidebar.className = 'hotel-sidebar';
-        document.querySelector('.container').appendChild(sidebar);
-    }
-    sidebar.innerHTML = '';
-
-    hotels.forEach(h => {
-        const hotel = normalizeHotel(h);
-
-        const item = document.createElement('div');
-        item.className = 'hotel-entry';
-
-        const img = document.createElement('img');
-        img.src = PLACEHOLDER_IMG;
-        if (hotel.image) {
-            const loader = new Image();
-            loader.onload = () => { img.src = hotel.image; };
-            loader.onerror = () => { img.src = PLACEHOLDER_IMG; };
-            loader.src = hotel.image;
-        }
-        item.appendChild(img);
-
-        const info = document.createElement('div');
-        info.className = 'hotel-info';
-        info.innerHTML = `
-            <h3>${hotel.name}</h3>
-            <p>${hotel.address}</p>
-            ${hotel.price ? `<p class="price">${hotel.price}</p>` : ''}
-            ${hotel.lat && hotel.lng ? `<p class="coords">${hotel.lat}, ${hotel.lng}</p>` : ''}
-        `;
-        item.appendChild(info);
-
-        item.addEventListener('click', () => {
-            if (hotel.lat && hotel.lng) {
-                map.setCenter({ lat: parseFloat(hotel.lat), lng: parseFloat(hotel.lng) });
-                map.setZoom(15);
-            }
-        });
-
-        sidebar.appendChild(item);
-
-        if (hotel.lat && hotel.lng) {
-            const marker = new google.maps.Marker({
-                position: { lat: parseFloat(hotel.lat), lng: parseFloat(hotel.lng) },
-                map,
-                title: hotel.name
-            });
-            markers.push(marker);
-        }
-    });
-}
-
-const mashupForm = document.getElementById('mashup-form');
-if (mashupForm) {
-    mashupForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        clearMap();
-        const start = document.getElementById('start-city').value.trim();
-        const end = document.getElementById('end-city').value.trim();
-        const hotel = document.getElementById('hotel-name').value.trim();
-        const placeType = document.getElementById('place-type').value.trim();
-        const checkInDateInput = document.getElementById('check-in-date');
-        const adultsInput = document.getElementById('adults');
-        const roomQuantityInput = document.getElementById('room-quantity');
-        const checkInDate = checkInDateInput?.value || new Date().toISOString().split('T')[0];
-        const adults = adultsInput?.value || '1';
-        const roomQuantity = roomQuantityInput?.value || '1';
-        const resultDiv = document.getElementById('results');
-        resultDiv.innerHTML = '';
-        const oldSidebar = document.getElementById('hotel-sidebar');
-        if (oldSidebar) oldSidebar.remove();
-
-    if (start && end) {
-        try {
-            showLoading();
-            const res = await fetch(`/mashupJavalin/flightsAndPolyline?startPlace=${encodeURIComponent(start)}&endPlace=${encodeURIComponent(end)}`);
-            if (res.ok) {
-                const data = await res.json();
-                drawPolyline(data.polyline, '#FF0000');
-            } else {
-                resultDiv.innerHTML += '<p>Failed to load flight route.</p>';
-            }
-        } catch (err) {
-            console.error(err);
-            resultDiv.innerHTML += '<p>Error loading flight route.</p>';
-        } finally {
-            hideLoading();
-        }
-    }
-
-        if (placeType && (hotel || end)) {
-            try {
-                showLoading();
-                const query = hotel ? `hotelName=${encodeURIComponent(hotel)}` : `city=${encodeURIComponent(end)}`;
-                const url = `/mashupJavalin/hotelsAndSights?${query}&placeType=${encodeURIComponent(placeType)}&checkInDate=${encodeURIComponent(checkInDate)}&adults=${encodeURIComponent(adults)}&roomQuantity=${encodeURIComponent(roomQuantity)}`;
-                const res = await fetch(url);
-                if (res.ok) {                    const data = await res.json();
-                    const hotels = Array.isArray(data) ? data : (data.hotels || []);
-                    if (hotels.length) {
-                        renderHotels(hotels);
-                    }
-                    const sights = Array.isArray(data) ? [] : (data.sights || []);
-                    if (sights.length) {
-                        const geocoder = new google.maps.Geocoder();
-                        sights.forEach(place => {
-                            const name = place['Name of place '] || place.name;
-                            const address = place['adress '] || place.address;
-                            geocoder.geocode({ address }, (results, status) => {
-                                if (status === 'OK' && results[0]) {
-                                    const marker = new google.maps.Marker({
-                                        position: results[0].geometry.location,
-                                        map,
-                                        title: name
-                                    });
-                                    markers.push(marker);
-                                }
-                            });
-                        });
-                    }
-                } else {
-                    resultDiv.innerHTML += '<p>Failed to load nearby sights.</p>';
-                }
-        } catch (err) {
-                console.error(err);
-                resultDiv.innerHTML += '<p>Error loading nearby sights.</p>';
-            } finally {
-                hideLoading();
-        }
-    }
-
-        if (start && hotel) {
-            try {
-                showLoading();
-                const res = await fetch(`/mashupJavalin/distToHotel?airport=${encodeURIComponent(start)}&hotel=${encodeURIComponent(hotel)}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.polyline) drawPolyline(data.polyline, '#0000FF');
-                    if (data.distance && data.duration) {
-                        resultDiv.innerHTML += `<p>Airport to hotel: ${data.distance} (${data.duration})</p>`;
-                    }
-                } else {
-                    resultDiv.innerHTML += '<p>Failed to load distance to hotel.</p>';
-                }
-            }  catch (err) {
-                console.error(err);
-                resultDiv.innerHTML += '<p>Error loading distance to hotel.</p>';}
-                finally {
-                    hideLoading();
-                }
-
-        }
-
-        if (end) {
-            try {
-                showLoading();
-                const res = await fetch(`/mashupJavalin/distToAirport?city=${encodeURIComponent(end)}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.polyline) drawPolyline(data.polyline, '#00AA00');
-                    if (data.distance && data.duration) {
-                        resultDiv.innerHTML += `<p>City to airport: ${data.distance} (${data.duration})</p>`;
-                    }
-                } else {
-                    resultDiv.innerHTML += '<p>Failed to load distance to airport.</p>';
-                }
-            } catch (err) {
-                console.error(err);
-                resultDiv.innerHTML += '<p>Error loading distance to airport.</p>';
-            } finally {
-                hideLoading();
-            }
-        }
-    });
-}
 function decodePolyline(encoded) {
     let points = [];
     let index = 0, len = encoded.length;
@@ -250,5 +61,197 @@ function drawPolyline(encoded, color) {
         map
     });
     polylines.push(poly);
-    return { poly, path };
+}
+
+function formatDateTime(dateTimeStr) {
+    if (!dateTimeStr) return 'N/A';
+    const date = new Date(dateTimeStr);
+    return date.toLocaleString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function displayFlight(flight, container) {
+    const div = document.createElement('div');
+    div.className = 'flight-card';
+    div.innerHTML = `
+        <h3>${flight.airline} Flight</h3>
+        <div class="flex">
+            <div>
+                <p><strong>${flight.origin} → ${flight.destination}</strong></p>
+                <p>Departure: ${formatDateTime(flight.departure)}</p>
+                <p>Arrival: ${formatDateTime(flight.arrival)}</p>
+            </div>
+            <div>
+                <p>Duration: ${flight.duration}</p>
+                <p>Class: ${flight.class || 'Economy'}</p>
+            </div>
+        </div>
+        <span class="price-tag">${flight.price} ${flight.currency}</span>
+    `;
+    container.appendChild(div);
+}
+
+function renderHotel(hotelObj, container) {
+    const hotelData = hotelObj.offers[0];
+    const hotel = hotelData.hotel;
+    const offer = hotelData.offers[0];
+    const imageUrl = hotel.media?.[0]?.uri || PLACEHOLDER_IMG;
+    const div = document.createElement('div');
+    div.className = 'hotel-card';
+    div.innerHTML = `
+        <img src="${imageUrl}" alt="${hotel.name}" class="hotel-thumb">
+        <h3>${hotel.name}</h3>
+        <p>${hotel.address?.lines?.join(', ') || ''}</p>
+        <p>${hotel.address?.cityName || ''}, ${hotel.address?.countryCode || ''}</p>
+        <div class="flex">
+            <span>Rating: ${hotel.rating || 'N/A'}</span>
+            <span>Room type: ${offer.room?.type || 'Standard'}</span>
+        </div>
+        <p>${offer.room?.description?.text || 'Comfortable accommodation'}</p>
+        <span class="price-tag">${offer.price.total} ${offer.price.currency}</span>
+    `;
+    container.appendChild(div);
+}
+
+function plotHotelsOnMap(hotels) {
+    if (!Array.isArray(hotels) || typeof google === 'undefined' || !map) return;
+    const bounds = new google.maps.LatLngBounds();
+    hotels.forEach(hotelObj => {
+        const hotelData = hotelObj.offers?.[0];
+        const hotel = hotelData?.hotel || {};
+        const lat = hotel.geoCode?.latitude || hotel.latitude;
+        const lng = hotel.geoCode?.longitude || hotel.longitude;
+        if (lat && lng) {
+            const marker = new google.maps.Marker({
+                position: { lat: parseFloat(lat), lng: parseFloat(lng) },
+                map,
+                title: hotel.name || 'Hotel'
+            });
+            markers.push(marker);
+            bounds.extend(marker.getPosition());
+        }
+    });
+    if (!bounds.isEmpty()) {
+        map.fitBounds(bounds);
+    }
+}
+
+function setupIataAutocomplete(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const listId = `${inputId}-options`;
+    let dataList = document.getElementById(listId);
+    if (!dataList) {
+        dataList = document.createElement('datalist');
+        dataList.id = listId;
+        document.body.appendChild(dataList);
+        input.setAttribute('list', listId);
+    }
+    input.addEventListener('input', async () => {
+        const query = input.value.trim().toUpperCase();
+        input.value = query;
+        if (query.length < 2) {
+            dataList.innerHTML = '';
+            return;
+        }
+        try {
+            showLoading();
+            const res = await fetch(`/search/locations?keyword=${encodeURIComponent(query)}`);
+            if (!res.ok) return;
+            const locations = await res.json();
+            dataList.innerHTML = locations
+                .filter(loc => loc.iataCode)
+                .map(loc => `<option value="${loc.iataCode}">${loc.name || ''}</option>`)
+                .join('');
+        } catch (err) {
+            console.error('Autocomplete error', err);
+        } finally {
+            hideLoading();
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const today = new Date().toISOString().split('T')[0];
+    const dateInput = document.getElementById('departureDate');
+    if (dateInput) {
+        dateInput.min = today;
+        dateInput.value = today;
+    }
+    setupIataAutocomplete('origin');
+    setupIataAutocomplete('destination');
+    const form = document.getElementById('mashup-form');
+    if (form) {
+        form.addEventListener('submit', handleMashupSearch);
+    }
+});
+
+async function handleMashupSearch(e) {
+    e.preventDefault();
+    clearMap();
+    const origin = document.getElementById('origin').value.trim().toUpperCase();
+    const destination = document.getElementById('destination').value.trim().toUpperCase();
+    const departureDate = document.getElementById('departureDate').value;
+    const adults = document.getElementById('adults').value;
+    const includeHotels = document.getElementById('includeHotels').checked;
+    const flightContainer = document.getElementById('flight-results');
+    const hotelSection = document.getElementById('hotel-section');
+    const hotelContainer = document.getElementById('hotel-results');
+    flightContainer.innerHTML = '';
+    hotelContainer.innerHTML = '';
+    hotelSection.style.display = 'none';
+    const searchBtn = document.getElementById('mashup-search-btn');
+    searchBtn.querySelector('.spinner').classList.remove('hidden');
+    searchBtn.querySelector('span').textContent = 'Searching...';
+    searchBtn.disabled = true;
+    try {
+        showLoading();
+        const routeRes = await fetch(`/mashupJavalin/flightsAndPolyline?startPlace=${encodeURIComponent(origin)}&endPlace=${encodeURIComponent(destination)}`);
+        if (routeRes.ok) {
+            const routeData = await routeRes.json();
+            if (routeData.polyline) {
+                drawPolyline(routeData.polyline, '#FF0000');
+            }
+        }
+        const flightRes = await fetch(`/search/flights?origin=${origin}&destination=${destination}&departureDate=${departureDate}&adults=${adults}`);
+        const flightData = await flightRes.json();
+        if (flightRes.ok && Array.isArray(flightData) && flightData.length) {
+            flightData.forEach(f => displayFlight(f, flightContainer));
+        } else {
+            flightContainer.innerHTML = '<div class="error-message"><h3>No Flights Found</h3></div>';
+        }
+        if (includeHotels) {
+            const keyRes = await fetch('/config/maps-key');
+            if (keyRes.ok) {
+                const { apiKey } = await keyRes.json();
+                const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(destination)}&key=${apiKey}`);
+                const geoData = await geoRes.json();
+                if (geoData.status === 'OK' && geoData.results.length) {
+                    const { lat, lng } = geoData.results[0].geometry.location;
+                    const hotelRes = await fetch(`/search/nearby?lat=${lat}&lng=${lng}&checkInDate=${departureDate}&adults=${adults}&roomQuantity=1`);
+                    if (hotelRes.ok) {
+                        const hotelData = await hotelRes.json();
+                        const offers = hotelData.offers || [];
+                        if (offers.length) {
+                            hotelSection.style.display = 'block';
+                            offers.forEach(h => renderHotel(h, hotelContainer));
+                            plotHotelsOnMap(offers);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Mashup search error:', err);
+        flightContainer.innerHTML = `<div class="error-message"><h3>Error</h3><p>${err.message}</p></div>`;
+    } finally {
+        hideLoading();
+        searchBtn.querySelector('.spinner').classList.add('hidden');
+        searchBtn.querySelector('span').textContent = 'Search';
+        searchBtn.disabled = false;
+    }
 }
