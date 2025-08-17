@@ -67,15 +67,7 @@ function initMap() {
     });
 }
 
-function initAutocomplete() {
-    const cityInput = document.getElementById("city-input");
-    if (cityInput) {
-        new google.maps.places.Autocomplete(cityInput, {
-            types: ["(cities)"],
-            fields: ["geometry", "name"]
-        });
-    }
-}
+
 
 function requestTripInfo(destLat, destLng) {
     // Clear previous marker

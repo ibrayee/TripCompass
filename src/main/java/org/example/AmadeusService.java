@@ -1,18 +1,14 @@
 package org.example;
 
-import com.amadeus.resources.Location;
 import com.amadeus.Amadeus;
 import com.amadeus.Params;
 import com.amadeus.exceptions.ResponseException;
+import com.amadeus.resources.Location;
 import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.HashMap;
+
+import java.util.*;
 
 public class AmadeusService {
     private static final Logger logger = LoggerFactory.getLogger(AmadeusService.class);
@@ -44,7 +40,6 @@ public class AmadeusService {
     }
 
 
-
     public List<String> getNearbyAirports(double lat, double lng, int radiusKm, int limit) throws ResponseException {
         List<String> airportCodes = new ArrayList<>();
         String latStr = String.format(Locale.US, "%.6f", lat);
@@ -55,7 +50,8 @@ public class AmadeusService {
                 .and("radius", radiusKm)
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.airports.get(params);        if (results != null) {
+        Location[] results = amadeus.referenceData.locations.airports.get(params);
+        if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null) {
                     airportCodes.add(loc.getIataCode());
@@ -75,7 +71,8 @@ public class AmadeusService {
                 .and("radius", radiusKm)
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.airports.get(params);        if (results != null) {
+        Location[] results = amadeus.referenceData.locations.airports.get(params);
+        if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null && loc.getGeoCode() != null) {
                     Map<String, Object> info = new HashMap<>();
@@ -133,39 +130,73 @@ public class AmadeusService {
 
             if (results != null && results.length > 0 && results[0].getGeoCode() != null) {
                 Location.GeoCode geo = results[0].getGeoCode();
-                logger.info("Geocoded {} to: {} , {}", cityName, geo.getLatitude(), geo.getLongitude());                return new double[]{geo.getLatitude(), geo.getLongitude()};
+                logger.info("Geocoded {} to: {} , {}", cityName, geo.getLatitude(), geo.getLongitude());
+                return new double[]{geo.getLatitude(), geo.getLongitude()};
             } else {
-                logger.warn("No geocode result for: {}", cityName);            }
+                logger.warn("No geocode result for: {}", cityName);
+            }
         } catch (Exception e) {
-            logger.error("Failed to geocode city: {}", cityName, e);            e.printStackTrace();
+            logger.error("Failed to geocode city: {}", cityName, e);
+            e.printStackTrace();
         }
         return null;
     }
 
+    public List<Map<String, Object>> searchLocations(String keyword) throws ResponseException {
+        List<Map<String, Object>> suggestions = new ArrayList<>();
+        Params params = Params.with("keyword", keyword)
+                .and("subType", "AIRPORT,CITY")
+                .and("page[limit]", 5);
+        Location[] results = amadeus.referenceData.locations.get(params);
+        if (results != null) {
+            for (Location loc : results) {
+                Map<String, Object> info = new HashMap<>();
+                if (loc.getName() != null) {
+                    info.put("name", loc.getName());
+                }
+                if (loc.getIataCode() != null) {
+                    info.put("iataCode", loc.getIataCode());
+                }
+                if (loc.getGeoCode() != null) {
+                    info.put("lat", loc.getGeoCode().getLatitude());
+                    info.put("lng", loc.getGeoCode().getLongitude());
+                }
+                suggestions.add(info);
+            }
+        }
+        return suggestions;
+    }
+
+
     public String findNearestAirportCode(double lat, double lng) {
+        return findNearestAirportCode(lat, lng, 200);
+    }
+
+    public String findNearestAirportCode(double lat, double lng, int initialRadiusKm) {
         try {
             String latStr = String.format(Locale.US, "%.6f", lat);
             String lngStr = String.format(Locale.US, "%.6f", lng);
 
-            logger.debug("Find airport with lat={}, lng={}", latStr, lngStr);
-            Params params = Params.with("latitude", latStr)
-                    .and("longitude", lngStr)
-                    .and("radius", 200)
-                    .and("page[limit]", 1);
+            int radius = initialRadiusKm;
+            final int maxRadius = 1000;
+            while (radius <= maxRadius) {
+                logger.debug("Find airport with lat={}, lng={}, radius={}", latStr, lngStr, radius);
+                Params params = Params.with("latitude", latStr)
+                        .and("longitude", lngStr)
+                        .and("radius", radius)
+                        .and("page[limit]", 1);
 
-            Location[] locations = amadeus.referenceData.locations.airports.get(params);
-            logger.debug("Locations result: {}", Arrays.toString(locations));        if (locations != null && locations.length > 0) {
-                return locations[0].getIataCode();
+                Location[] locations = amadeus.referenceData.locations.airports.get(params);
+                logger.debug("Locations result for radius {}: {}", radius, Arrays.toString(locations));
+                if (locations != null && locations.length > 0) {
+                    return locations[0].getIataCode();
+                }
+                radius *= 2;
             }
-            throw new IllegalArgumentException("No nearby airport found for your location");
         } catch (Exception e) {
             logger.error("Failed to get nearest airport", e);
-            throw new RuntimeException("Failed to get nearest airport: " + e.getMessage());
         }
-
+        return null;
     }
 
-
-
 }
-

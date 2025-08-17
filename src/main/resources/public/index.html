@@ -13,8 +13,8 @@
             <li class="länk"><a href="index.html">Start</a></li>
             <li class="länk"><a href="flights.html">Flights</a></li>
             <li class="länk"><a href="hotels.html">Hotels</a></li>
-        </ul>
-    </nav>
+            <li class="länk"><a href="mashup.html">Mashup</a></li>
+        </ul>    </nav>
     <div id="app-container">
         <div id="search-bar">
             <input type="text" id="city-input" placeholder="Origin (e.g. ARN)">
@@ -39,9 +39,10 @@
             <div id="results"></div>
         </div>
     </div>
-
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrGvXIcYVGUllsp39JAWkg1t2DA8jFMI0&callback=initMap&libraries=places,marker" async defer></script>
     <script src="js/map.js"></script>
+
+    <script src="js/autocomplete.js"></script>
+    <script src="js/loadGoogleMaps.js"></script>
     <script src="js/searchBar.js"></script>
     <script src="js/sidebar.js"></script>
 </body>

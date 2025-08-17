@@ -1,10 +1,11 @@
 package org.example;
 
+import com.amadeus.exceptions.ResponseException;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.amadeus.exceptions.ResponseException;
+
 import java.util.*;
 
 /**
@@ -22,16 +23,7 @@ public class TripInfoService {
     }
 
     /**
-     * Fetches combined trip information.
-     *
-     * @param lat           destination latitude
-     * @param lng           destination longitude
-     * @param originCity    starting city name
-     * @param checkInDate   check-in date (YYYY-MM-DD)
-     * @param adults        number of adults
-     * @param rooms         number of rooms
-     * @return map containing coordinates, airports, hotel offers and flight offers
-     * @throws ResponseException if Amadeus API calls fail
+     Fetches combined trip information using an origin city name.
      */
     public Map<String, Object> getTripInfo(
             double lat,
@@ -41,10 +33,48 @@ public class TripInfoService {
             int adults,
             int rooms
     ) throws ResponseException {
+        double[] originCoords = amadeusService.geocodeCityToCoords(originCity);
+        if (originCoords == null) throw new IllegalArgumentException("Could not geolocate origin city");
+
+        String originAirport = amadeusService.getNearestAirport(originCoords[0], originCoords[1]);
+        if (originAirport == null) throw new IllegalStateException("No origin airport found");
+
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms);
+    }
+
+    /**
+     * Fetches combined trip information when origin coordinates and/or airport are already known.
+     */
+    public Map<String, Object> getTripInfo(
+            double lat,
+            double lng,
+            String originAirport,
+            double originLat,
+            double originLng,
+            String checkInDate,
+            int adults,
+            int rooms
+    ) throws ResponseException {
+        double[] originCoords = new double[]{originLat, originLng};
+        if (originAirport == null || originAirport.isBlank()) {
+            originAirport = amadeusService.getNearestAirport(originLat, originLng);
+            if (originAirport == null) throw new IllegalStateException("No origin airport found");
+        }
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms);
+    }
+
+    private Map<String, Object> getTripInfoInternal(
+            double lat,
+            double lng,
+            String originAirport,
+            double[] originCoords,
+            String checkInDate,
+            int adults,
+            int rooms
+    ) throws ResponseException {
         System.out.println("STARTING TRIP INFO...");
         System.out.println("Lat: " + lat + ", Lng: " + lng);
-        System.out.println("Origin city: " + originCity + ", Check-in: " + checkInDate);
-
+        System.out.println("Origin airport: " + originAirport + ", Check-in: " + checkInDate);
         System.out.println("→ Looking up nearest airport for destination...");
         String destinationAirport = amadeusService.getNearestAirport(lat, lng);
         if (destinationAirport == null) {
@@ -58,14 +88,7 @@ public class TripInfoService {
             }
         }
 
-        System.out.println("→ Geocoding origin city: " + originCity);
-        double[] originCoords = amadeusService.geocodeCityToCoords(originCity);
-        if (originCoords == null) throw new IllegalArgumentException("Could not geolocate origin city");
-        System.out.println("→ Origin coords: " + Arrays.toString(originCoords));
-
-        String originAirport = amadeusService.getNearestAirport(originCoords[0], originCoords[1]);
-        System.out.println("→ Found origin airport: " + originAirport);
-        if (originAirport == null) throw new IllegalStateException("No origin airport found");
+       System.out.println("→ Origin coords: " + Arrays.toString(originCoords));
 
 
         // 3. Search hotel offers (limit to top 3)
@@ -122,22 +145,57 @@ public class TripInfoService {
 
         // 5. Simplify flight offers (limit to top 3)
         JsonArray simplifiedFlights = new JsonArray();
+        Set<String> seenFlights = new HashSet<>();
         for (var offerElement : flightArray) {
             JsonObject offer = offerElement.getAsJsonObject();
             JsonObject itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
-            JsonObject segment   = itinerary.getAsJsonArray("segments").get(0).getAsJsonObject();
-            JsonObject dep       = segment.getAsJsonObject("departure");
-            JsonObject arr       = segment.getAsJsonObject("arrival");
+            var segments = itinerary.getAsJsonArray("segments");
+            JsonObject firstSegment = segments.get(0).getAsJsonObject();
+            JsonObject lastSegment = segments.get(segments.size() - 1).getAsJsonObject();
+            JsonObject dep = firstSegment.getAsJsonObject("departure");
+            JsonObject arr = lastSegment.getAsJsonObject("arrival");
 
+            String originCode = dep.get("iataCode").getAsString();
+            String destCode = arr.get("iataCode").getAsString();
+            String depTime = dep.get("at").getAsString();
+            String key = originCode + destCode + depTime;
+            if (seenFlights.contains(key)) {
+                continue;
+            }
+            seenFlights.add(key);
             JsonObject simple = new JsonObject();
-            simple.addProperty("origin", dep.get("iataCode").getAsString());
-            simple.addProperty("destination", arr.get("iataCode").getAsString());
-            simple.addProperty("departure", dep.get("at").getAsString());
+            simple.addProperty("origin", originCode);
+            simple.addProperty("destination", destCode);
+            simple.addProperty("departure", depTime);
             simple.addProperty("arrival", arr.get("at").getAsString());
             simple.addProperty("duration", itinerary.get("duration").getAsString());
             simple.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
             simple.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-            simple.addProperty("airline", segment.get("carrierCode").getAsString());
+            simple.addProperty("airline", firstSegment.get("carrierCode").getAsString());
+
+            JsonArray legs = new JsonArray();
+            JsonArray stopovers = new JsonArray();
+            for (int i = 0; i < segments.size(); i++) {
+                JsonObject seg = segments.get(i).getAsJsonObject();
+                JsonObject segDep = seg.getAsJsonObject("departure");
+                JsonObject segArr = seg.getAsJsonObject("arrival");
+
+                JsonObject leg = new JsonObject();
+                leg.addProperty("origin", segDep.get("iataCode").getAsString());
+                leg.addProperty("destination", segArr.get("iataCode").getAsString());
+                leg.addProperty("departure", segDep.get("at").getAsString());
+                leg.addProperty("arrival", segArr.get("at").getAsString());
+                leg.addProperty("airline", seg.get("carrierCode").getAsString());
+                legs.add(leg);
+
+                if (i < segments.size() - 1) {
+                    stopovers.add(segArr.get("iataCode").getAsString());
+                }
+            }
+            simple.add("segments", legs);
+            if (stopovers.size() > 0) {
+                simple.add("stopovers", stopovers);
+            }
 
             simplifiedFlights.add(simple);
             if (simplifiedFlights.size() >= 3) break;

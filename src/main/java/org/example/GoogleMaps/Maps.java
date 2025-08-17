@@ -41,6 +41,10 @@ public class Maps {
        // googleJavalin.theRouteTimeAndDistance(app);
         MashupJavalin mashup = new MashupJavalin();
         mashup.flightsAndPolyline(app);
+        mashup.hotelsAndSights(app);
+        mashup.distToHotel(app);
+        mashup.distToAirport(app);
+        mashup.nearbyAirports(app);
         System.out.println("Server igång på http://localhost:7000");
     }
     }

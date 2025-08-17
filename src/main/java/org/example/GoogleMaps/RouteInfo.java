@@ -39,8 +39,7 @@ public class RouteInfo { // använder Google maps Distance API
 
         HttpRequest httpRequest =
                 HttpRequest.newBuilder()
-                        .uri(URI.create("https://maps.googleapis.com/maps/api/directions/json?origin=" + encodeStart + "&destination=" + encodeEnd + "&key=" + apiKey))
-                        .build();
+                        .uri(URI.create("https://maps.googleapis.com/maps/api/directions/json?mode=driving&origin=" + encodeStart + "&destination=" + encodeEnd + "&key=" + apiKey))                        .build();
 
         HttpResponse<String> response = null;
         try {
@@ -86,29 +85,49 @@ public class RouteInfo { // använder Google maps Distance API
     }
 
 
-        public String getPolyline () {
-
-            JsonObject polylineObj = JsonParser.parseString(jSonRoute).getAsJsonObject();
-
-            JsonArray polyArr = polylineObj.getAsJsonArray("routes");
-
-            if (polyArr.size() > 0) {
-                JsonObject routeTo = polyArr.get(0).getAsJsonObject();
-                JsonObject overViewLine = routeTo.getAsJsonObject("overview_polyline");
-
-                String thePolyline = overViewLine.get("points").getAsString();
-
-                System.out.println("The polyline code " + thePolyline);
-
-                return thePolyline;
-
-            } else {
-                return "No polyline could be found";
-            }
-
-
+    public String getPolyline() {
+        JsonObject polylineObj = JsonParser.parseString(jSonRoute).getAsJsonObject();
+        JsonArray polyArr = polylineObj.getAsJsonArray("routes");
+        if (polyArr.size() > 0) {
+            JsonObject routeTo = polyArr.get(0).getAsJsonObject();
+            JsonObject overViewLine = routeTo.getAsJsonObject("overview_polyline");
+            String thePolyline = overViewLine.get("points").getAsString();
+            System.out.println("The polyline code " + thePolyline);
+            return thePolyline;
+        } else {
+            return "No polyline could be found";
         }
-
     }
+    public String getDistance() {
+        JsonObject responseJObj = JsonParser.parseString(jSonRoute).getAsJsonObject();
+        JsonArray routesArr = responseJObj.getAsJsonArray("routes");
+        if (routesArr.size() > 0) {
+            JsonObject answerArrFirst = routesArr.get(0).getAsJsonObject();
+            JsonArray legs = answerArrFirst.getAsJsonArray("legs");
+            if (legs.size() > 0) {
+                JsonObject answerLegsArr = legs.get(0).getAsJsonObject();
+                JsonObject distanceKm = answerLegsArr.getAsJsonObject("distance");
+                return distanceKm.get("text").getAsString();
+            }
+        }
+        return null;
+    }
+    public String getDuration() {
+        JsonObject responseJObj = JsonParser.parseString(jSonRoute).getAsJsonObject();
+        JsonArray routesArr = responseJObj.getAsJsonArray("routes");
+        if (routesArr.size() > 0) {
+            JsonObject answerArrFirst = routesArr.get(0).getAsJsonObject();
+            JsonArray legs = answerArrFirst.getAsJsonArray("legs");
+            if (legs.size() > 0) {
+                JsonObject answerLegsArr = legs.get(0).getAsJsonObject();
+                JsonObject timeTrip = answerLegsArr.getAsJsonObject("duration");
+                return timeTrip.get("text").getAsString();
+            }
+        }
+        return null;
+    }
+
+
+}
 
 

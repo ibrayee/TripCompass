@@ -7,6 +7,8 @@
     <title>Flight Search TripCompass</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/flights.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/loading.css">
 </head>
 
 <body>
@@ -16,6 +18,7 @@
             <li class="länk"><a href="index.html">Start</a></li>
             <li class="länk"><a href="flights.html">Flights</a></li>
             <li class="länk"><a href="hotels.html">Hotels</a></li>
+            <li class="länk"><a href="mashup.html">Mashup</a></li>
         </ul>
     </nav>
     <div class="container">
@@ -57,7 +60,10 @@
             <div id="results"></div>
         </div>
     </div>
-
+    <div id="loading-overlay" class="hidden"><div class="spinner"></div></div>
+    <script src="js/autocomplete.js"></script>
+    <script src="js/loadGoogleMaps.js"></script>
+    <script type="module" src="js/loading.js"></script>
     <script src="js/flights.js"></script>
 </body>
 
