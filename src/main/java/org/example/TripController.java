@@ -326,9 +326,10 @@ public class TripController {
         String checkInDate = ctx.queryParam("checkInDate");
         String adultsStr = ctx.queryParam("adults") != null ? ctx.queryParam("adults").trim() : null;
         String roomQuantityStr = ctx.queryParam("roomQuantity") != null ? ctx.queryParam("roomQuantity").trim() : null;
-
-        System.out.println("[DEBUG] lat=" + latStr + ", lng=" + lngStr + ", checkInDate=" + checkInDate + ", adults=" + adultsStr + ", roomQuantity=" + roomQuantityStr);
-
+        String radiusStr = ctx.queryParam("radius") != null ? ctx.queryParam("radius").trim() : null;
+        String limitStr = ctx.queryParam("limit") != null ? ctx.queryParam("limit").trim() : null;
+        System.out.println("[DEBUG] lat=" + latStr + ", lng=" + lngStr + ", checkInDate=" + checkInDate + ", adults=" + adultsStr
+                + ", roomQuantity=" + roomQuantityStr + ", radius=" + radiusStr + ", limit=" + limitStr);
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
             ctx.status(400).result("Invalid parameters: coordinates are not valid.");
             return;
@@ -345,14 +346,22 @@ public class TripController {
             ctx.status(400).result("Invalid parameters: room quantity is not valid.");
             return;
         }
-
+        if (radiusStr != null && !ValidationUtils.isPositiveInteger(radiusStr)) {
+            ctx.status(400).result("Invalid parameters: radius is not valid.");
+            return;
+        }
+        if (limitStr != null && !ValidationUtils.isPositiveInteger(limitStr)) {
+            ctx.status(400).result("Invalid parameters: limit is not valid.");
+            return;
+        }
         try {
             double lat = Double.parseDouble(latStr);
             double lng = Double.parseDouble(lngStr);
             int adults = Integer.parseInt(adultsStr);
             int rooms = Integer.parseInt(roomQuantityStr);
-
-            String hotelResponseJson = amadeusService.getHotelsByGeocode(lat, lng, 10);
+            int radius = (radiusStr != null) ? Integer.parseInt(radiusStr) : 10;
+            int limit = (limitStr != null) ? Integer.parseInt(limitStr) : 5;
+            String hotelResponseJson = amadeusService.getHotelsByGeocode(lat, lng, radius);
             JsonArray hotelArray = JsonParser.parseString(hotelResponseJson).getAsJsonArray();
 
             List<Map<String, Object>> validOffers = new ArrayList<>();
@@ -371,7 +380,7 @@ public class TripController {
                         System.out.println("[SKIP] " + hotelId + " => " + e.getMessage());
                     }
                 }
-                if (validOffers.size() >= 5) break;
+                if (validOffers.size() >= limit) break;
             }
 
             if (validOffers.isEmpty()) {
