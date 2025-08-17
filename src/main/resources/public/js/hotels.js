@@ -14,13 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fallback: attempt to fetch immediately if no form present
         fetchHotels();
     }
-
-    const closeBtn = document.getElementById('close-sidebar');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            document.getElementById('sidebar').classList.add('hidden');
-        });
-    }
 });
 
 let allHotelData = [];
@@ -56,67 +49,86 @@ async function fetchHotels() {
     const adults = document.getElementById('adults')?.value || '1';
     const rooms = document.getElementById('rooms')?.value || '1';
 
-    // Reset pagination and data for each new search
+    // Reset paginazione
     allHotelData = [];
     offset = 0;
-    document.getElementById('loadMore').style.display = 'none';
-    // Show loading state
+
+    const loadMoreEl = document.getElementById('loadMore');
+    if (loadMoreEl) loadMoreEl.style.display = 'none';
+
     const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = '<div class="loading-spinner"></div>';
+    if (resultsDiv) resultsDiv.innerHTML = '<div class="loading-spinner"></div>';
+
     if (typeof clearMap === 'function') clearMap();
 
+    let apiKey, geoData, response, data;
+
     try {
+        showLoading?.();
+
+        // 1) Chiave Maps
         const keyRes = await fetch('/config/maps-key');
         if (!keyRes.ok) throw new Error('Failed to load Maps API key');
-        const { apiKey } = await keyRes.json();
+        ({ apiKey } = await keyRes.json());
 
-        // Geocode destination to coordinates
+        // 2) Geocoding
         const geoRes = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(destination)}&key=${apiKey}`);
-        const geoData = await geoRes.json();
-        if (geoData.status !== 'OK' || !geoData.results.length) {
+        geoData = await geoRes.json();
+        if (geoData.status !== 'OK' || !geoData.results?.length) {
             throw new Error('Destination not found');
         }
         const { lat, lng } = geoData.results[0].geometry.location;
 
+        // 3) Backend search
         const url = `/search/nearby?lat=${lat}&lng=${lng}&checkInDate=${encodeURIComponent(checkInDate)}&adults=${encodeURIComponent(adults)}&roomQuantity=${encodeURIComponent(rooms)}`;
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-        }
-        const data = await response.json();
-        
-        resultsDiv.innerHTML = '';
-        
-        if (!data.offers || data.offers.length === 0) {
-            resultsDiv.innerHTML = `
-                <div class="error-message">
-                    <h3>No Hotels Found</h3>
-                    <p>We couldn't find any hotels matching your criteria.</p>
-                    <p>adjust your search</p>
-                </div>
-            `;
+        response = await fetch(url);
+        if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+        data = await response.json();
+
+        if (resultsDiv) resultsDiv.innerHTML = '';
+
+        // Controllo struttura risultati
+        if (!data?.offers || !Array.isArray(data.offers) || data.offers.length === 0) {
+            if (resultsDiv) {
+                resultsDiv.innerHTML = `
+          <div class="error-message">
+            <h3>No Hotels Found</h3>
+            <p>We couldn't find any hotels matching your criteria.</p>
+            <p>Try adjusting your search.</p>
+          </div>`;
+            }
             return;
         }
-        
+
+        // Salva e renderizza
         allHotelData.push(...data.offers);
         renderNextHotels();
-        plotHotelsOnMap(allHotelData.slice(0, limit));
-        document.getElementById('sidebar').classList.remove('hidden');
 
-        if (allHotelData.length > limit) {
-            document.getElementById('loadMore').style.display = 'block';
+        // Mappa
+        plotHotelsOnMap(allHotelData.slice(0, limit));
+
+        // Sidebar
+
+        if (loadMoreEl && allHotelData.length > limit) {
+            loadMoreEl.style.display = 'block';
         }
+
     } catch (err) {
-        resultsDiv.innerHTML = `
-            <div class="error-message">
-                <h3>Error Loading Hotels</h3>
-                <p>${err.message}</p>
-                <p>Please try again later.</p>
-            </div>
-        `;
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `
+        <div class="error-message">
+          <h3>Error Loading Hotels</h3>
+          <p>${err.message}</p>
+          <p>Please try again later.</p>
+        </div>`;
+        }
         console.error('Hotel fetch error:', err);
+    } finally {
+        hideLoading?.();
     }
 }
+
 
 function renderNextHotels() {
     const container = document.getElementById('results');

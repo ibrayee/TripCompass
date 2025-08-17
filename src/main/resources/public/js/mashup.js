@@ -109,6 +109,7 @@ if (mashupForm) {
 
     if (start && end) {
         try {
+            showLoading();
             const res = await fetch(`/mashupJavalin/flightsAndPolyline?startPlace=${encodeURIComponent(start)}&endPlace=${encodeURIComponent(end)}`);
             if (res.ok) {
                 const data = await res.json();
@@ -119,15 +120,18 @@ if (mashupForm) {
         } catch (err) {
             console.error(err);
             resultDiv.innerHTML += '<p>Error loading flight route.</p>';
+        } finally {
+            hideLoading();
         }
     }
 
         if (placeType && (hotel || end)) {
             try {
+                showLoading();
                 const query = hotel ? `hotelName=${encodeURIComponent(hotel)}` : `city=${encodeURIComponent(end)}`;
                 const url = `/mashupJavalin/hotelsAndSights?${query}&placeType=${encodeURIComponent(placeType)}&checkInDate=${encodeURIComponent(checkInDate)}&adults=${encodeURIComponent(adults)}&roomQuantity=${encodeURIComponent(roomQuantity)}`;
-                const res = await fetch(url);                if (res.ok) {
-                    const data = await res.json();
+                const res = await fetch(url);
+                if (res.ok) {                    const data = await res.json();
                     const hotels = Array.isArray(data) ? data : (data.hotels || []);
                     if (hotels.length) {
                         renderHotels(hotels);
@@ -154,13 +158,16 @@ if (mashupForm) {
                     resultDiv.innerHTML += '<p>Failed to load nearby sights.</p>';
                 }
         } catch (err) {
-            console.error(err);
-            resultDiv.innerHTML += '<p>Error loading nearby sights.</p>';
+                console.error(err);
+                resultDiv.innerHTML += '<p>Error loading nearby sights.</p>';
+            } finally {
+                hideLoading();
         }
     }
 
         if (start && hotel) {
             try {
+                showLoading();
                 const res = await fetch(`/mashupJavalin/distToHotel?airport=${encodeURIComponent(start)}&hotel=${encodeURIComponent(hotel)}`);
                 if (res.ok) {
                     const data = await res.json();
@@ -169,15 +176,20 @@ if (mashupForm) {
                         resultDiv.innerHTML += `<p>Airport to hotel: ${data.distance} (${data.duration})</p>`;
                     }
                 } else {
-                    resultDiv.innerHTML += '<p>Failed to load distance to hotel.</p>';                }
-           }  catch (err) {
-            console.error(err);
-            resultDiv.innerHTML += '<p>Error loading distance to hotel.</p>';
+                    resultDiv.innerHTML += '<p>Failed to load distance to hotel.</p>';
+                }
+            }  catch (err) {
+                console.error(err);
+                resultDiv.innerHTML += '<p>Error loading distance to hotel.</p>';}
+                finally {
+                    hideLoading();
+                }
+
         }
-    }
 
         if (end) {
             try {
+                showLoading();
                 const res = await fetch(`/mashupJavalin/distToAirport?city=${encodeURIComponent(end)}`);
                 if (res.ok) {
                     const data = await res.json();
@@ -191,6 +203,8 @@ if (mashupForm) {
             } catch (err) {
                 console.error(err);
                 resultDiv.innerHTML += '<p>Error loading distance to airport.</p>';
+            } finally {
+                hideLoading();
             }
         }
     });

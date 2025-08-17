@@ -40,6 +40,7 @@ async function handleFlightSearch(e) {
     const url = `/search/flights?origin=${origin}&destination=${destination}&departureDate=${departureDate}&adults=${adults}`;
     
     try {
+        showLoading();
         const response = await fetch(url);
         const data = await response.json();
 
@@ -85,6 +86,7 @@ async function handleFlightSearch(e) {
         `;
         console.error('Flight search error:', err);
     } finally {
+        hideLoading();
         // Reset button state
         searchBtn.querySelector('.spinner').classList.add('hidden');
         searchBtn.querySelector('span').textContent = 'Search Flights';
@@ -112,6 +114,7 @@ function setupIataAutocomplete(inputId) {
             return;
         }
         try {
+            showLoading();
             const res = await fetch(`/search/locations?keyword=${encodeURIComponent(query)}`);
             if (!res.ok) return;
             const locations = await res.json();
@@ -121,6 +124,8 @@ function setupIataAutocomplete(inputId) {
                 .join('');
         } catch (err) {
             console.error('Autocomplete error', err);
+        } finally {
+            hideLoading();
         }
     });
 }
