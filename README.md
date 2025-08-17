@@ -37,11 +37,9 @@ The application will listen on port 7000.
 
 Example Endpoints
 /trip-info
-Returns combined information about hotels and flights.
-bash
+Returns combined information about hotels and flights. Results include full airline names. The optional `maxFlights` parameter (default 10) limits the number of flight offers.bash
 CopyEdit
-curl "http://localhost:7000/trip-info?lat=48.8566&lng=2.3522&origin=FCO&checkInDate=2025-12-01&adults=2&roomQuantity=1"
-
+curl "http://localhost:7000/trip-info?lat=48.8566&lng=2.3522&origin=FCO&checkInDate=2025-12-01&adults=2&roomQuantity=1&maxFlights=5"
 /nearby-airports
 Lists airports close to the given coordinates.
 bash
@@ -49,10 +47,9 @@ CopyEdit
 curl "http://localhost:7000/nearby-airports?lat=48.8566&lng=2.3522&limit=3"
 
 /search/flights
-Searches flight offers between two airports.
-bash
+Searches flight offers between two airports. Supports an optional `limit` query parameter (default 10) to restrict the number of returned offers. Airline codes are resolved to full names.bash
 CopyEdit
-curl "http://localhost:7000/search/flights?origin=FCO&destination=JFK&departureDate=2025-12-01&returnDate=2025-12-10&adults=1"
+curl "http://localhost:7000/search/flights?origin=FCO&destination=JFK&departureDate=2025-12-01&returnDate=2025-12-10&adults=1&limit=5"
 
 /search/nearby
 Finds hotel offers near a location.

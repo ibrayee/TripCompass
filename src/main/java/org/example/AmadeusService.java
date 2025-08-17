@@ -198,5 +198,29 @@ public class AmadeusService {
         }
         return null;
     }
+    public Map<String, String> getAirlineNames(List<String> codes) throws ResponseException {
+        Map<String, String> result = new HashMap<>();
+        if (codes == null || codes.isEmpty()) {
+            return result;
+        }
+
+        String joinedCodes = String.join(",", new LinkedHashSet<>(codes));
+        var airlines = amadeus.referenceData.airlines.get(
+                Params.with("airlineCodes", joinedCodes)
+        );
+        if (airlines != null) {
+            for (var airline : airlines) {
+                String code = airline.getIataCode();
+                String name = airline.getBusinessName();
+                if (name == null || name.isEmpty()) {
+                    name = airline.getCommonName();
+                }
+                if (code != null && name != null) {
+                    result.put(code, name);
+                }
+            }
+        }
+        return result;
+    }
 
 }
