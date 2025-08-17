@@ -8,6 +8,7 @@ import com.google.gson.JsonParser;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
+import io.javalin.http.HttpStatus;
 import org.slf4j.Logger;
 import org.example.GoogleMaps.MashupJavalin;
 
@@ -212,12 +213,14 @@ public class TripController {
         String adultsStr = ctx.queryParam("adults");
 
         if (origin == null || destination == null || departureDate == null || !ValidationUtils.isPositiveInteger(adultsStr)) {
+            logger.warn("Invalid parameters for flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
+                    origin, destination, departureDate, returnDate, adultsStr);
             ctx.status(400).result("Invalid or missing parameters.");
             return;
         }
+        int adults = Integer.parseInt(adultsStr);
 
         try {
-            int adults = Integer.parseInt(adultsStr);
             String flightsJson = amadeusService.getFlightOffers(origin, destination, departureDate, returnDate, adults);
             JsonArray originalArray = JsonParser.parseString(flightsJson).getAsJsonArray();
 
@@ -264,16 +267,23 @@ public class TripController {
                 simplified.add("segments", legs);
                 if (stopovers.size() > 0) {
                     simplified.add("stopovers", stopovers);
-                }                simplifiedArray.add(simplified);
+                }
+                simplifiedArray.add(simplified);
             }
 
             ctx.contentType("application/json");
             ctx.result(new Gson().toJson(simplifiedArray));
-
+        } catch (ResponseException e) {
+            logger.error(
+                    "Amadeus API error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
+                    origin, destination, departureDate, returnDate, adults, e);
+            ctx.status(HttpStatus.valueOf(e.getCode())).json(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            ctx.status(500).result("Internal Server Error: " + e.getMessage());
-        }
-    }
+            logger.error(
+                    "Unexpected error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
+                    origin, destination, departureDate, returnDate, adults, e);
+            ctx.status(500).json(Map.of("error", "Internal Server Error"));    }}
+
 
 
     private static void handleNearbySearch(Context ctx) {
