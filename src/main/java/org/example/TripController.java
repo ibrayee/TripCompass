@@ -218,6 +218,14 @@ public class TripController {
             ctx.status(400).result("Invalid or missing parameters.");
             return;
         }
+        if (!origin.matches("[A-Z]{3}") || !destination.matches("[A-Z]{3}")) {
+            logger.warn("Invalid IATA codes for flight search origin={}, destination={}", origin, destination);
+            ctx.status(400).json(Map.of(
+                    "error", "Origin and destination must be three-letter IATA codes."
+            ));
+            return;
+        }
+
         int adults = Integer.parseInt(adultsStr);
 
         try {

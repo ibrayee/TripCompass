@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
             dateInput.value = today;
         }
     }
+    setupIataAutocomplete('origin');
+    setupIataAutocomplete('destination');
 });
 
 async function handleFlightSearch(e) {
@@ -20,7 +22,16 @@ async function handleFlightSearch(e) {
     const destination = document.getElementById('destination').value.trim().toUpperCase();
     const departureDate = document.getElementById('departureDate').value;
     const adults = document.getElementById('adults').value;
-    
+    const iataRegex = /^[A-Z]{3}$/;
+    if (!iataRegex.test(origin) || !iataRegex.test(destination)) {
+        document.getElementById('results').innerHTML = `
+            <div class="error-message">
+                <h3>Invalid Airport Code</h3>
+                <p>Please enter valid three-letter IATA codes for both origin and destination.</p>
+            </div>
+        `;
+        return;
+    }
     const searchBtn = document.getElementById('flight-search-btn');
     searchBtn.querySelector('.spinner').classList.remove('hidden');
     searchBtn.querySelector('span').textContent = 'Searching...';
@@ -30,11 +41,11 @@ async function handleFlightSearch(e) {
     
     try {
         const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-        }
         const data = await response.json();
-        
+
+        if (!response.ok) {
+            throw new Error(data.error || `Server error: ${response.status}`);        }
+
         const resultsDiv = document.getElementById('results');
         resultsDiv.innerHTML = '';
         
@@ -79,6 +90,39 @@ async function handleFlightSearch(e) {
         searchBtn.querySelector('span').textContent = 'Search Flights';
         searchBtn.disabled = false;
     }
+}
+function setupIataAutocomplete(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const listId = `${inputId}-options`;
+    let dataList = document.getElementById(listId);
+    if (!dataList) {
+        dataList = document.createElement('datalist');
+        dataList.id = listId;
+        document.body.appendChild(dataList);
+        input.setAttribute('list', listId);
+    }
+
+    input.addEventListener('input', async () => {
+        const query = input.value.trim().toUpperCase();
+        input.value = query;
+        if (query.length < 2) {
+            dataList.innerHTML = '';
+            return;
+        }
+        try {
+            const res = await fetch(`/search/locations?keyword=${encodeURIComponent(query)}`);
+            if (!res.ok) return;
+            const locations = await res.json();
+            dataList.innerHTML = locations
+                .filter(loc => loc.iataCode)
+                .map(loc => `<option value="${loc.iataCode}">${loc.name || ''}</option>`)
+                .join('');
+        } catch (err) {
+            console.error('Autocomplete error', err);
+        }
+    });
 }
 
 function displayFlight(flight, container) {
