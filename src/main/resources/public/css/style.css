@@ -204,13 +204,19 @@ button#loadMore:hover {
   box-shadow: var(--shadow);
   border-radius: var(--radius);
   padding: 2rem;
-  margin-bottom: 2rem;
+  margin: 0 auto 2rem;
+  max-width: 800px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+
 }
 
 .form-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  max-width: 600px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .form-group {
@@ -315,7 +321,7 @@ button#loadMore:hover {
   margin: 2rem auto;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1400px) {
   #sidebar {
     position: relative;
     width: 100%;
@@ -338,16 +344,39 @@ button#loadMore:hover {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .navitem {
     flex-direction: column;
     gap: 0.5rem;
   }
 
+  .search-card {
+    padding: 1rem;         
+    max-width: 100%;     
+    border-radius: var(--radius-sm, 8px);
+}
+
+.form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .icon {
     font-size: 1.3rem;
+  }
+}
+
+@media (max-width: 300px) {
+  .search-card {
+    padding: 1rem;  
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;                
   }
 }
