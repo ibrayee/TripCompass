@@ -1,6 +1,5 @@
 function initAutocomplete() {
-    const selectors = ['#city-input', '#origin-input', '#origin', '#destination', '#hotel-destination'];
-    selectors.forEach(selector => {
+    const selectors = ['#city-input', '#origin-input', '#hotel-destination'];    selectors.forEach(selector => {
         const input = document.querySelector(selector);
         if (!input) return;
 

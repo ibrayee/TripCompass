@@ -8,7 +8,6 @@ import com.google.gson.JsonParser;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import io.javalin.http.HttpStatus;
 import org.slf4j.Logger;
 import org.example.GoogleMaps.MashupJavalin;
 
@@ -285,8 +284,7 @@ public class TripController {
             logger.error(
                     "Amadeus API error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
                     origin, destination, departureDate, returnDate, adults, e);
-            ctx.status(HttpStatus.valueOf(e.getCode())).json(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
+            ctx.status(Integer.parseInt(e.getCode())).json(Map.of("error", e.getMessage()));        } catch (Exception e) {
             logger.error(
                     "Unexpected error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
                     origin, destination, departureDate, returnDate, adults, e);
