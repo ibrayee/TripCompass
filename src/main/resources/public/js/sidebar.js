@@ -3,7 +3,7 @@ function renderSidebar(data, mode) {
     const container = document.getElementById("results");
     container.innerHTML = "";
 
-    if ((mode === 'hotels' || mode === 'trip') && data.hotels) {
+    if ((mode === 'hotels' || mode === 'trip') && data.hotels && data.hotels.length) {
         const hotelTitle = document.createElement("div");
         hotelTitle.className = "section-title";
         hotelTitle.textContent = "Hotels Nearby";
@@ -13,15 +13,17 @@ function renderSidebar(data, mode) {
             const hotel = document.createElement("div");
             hotel.className = "hotel";
 
-            const name = h.offers[0].hotel.name;
-            const price = h.offers[0].offers[0].price.total;
-            const currency = h.offers[0].offers[0].price.currency;
+            const offerContainer = Array.isArray(h.offers) ? h.offers[0] : null;
+            const name = offerContainer?.hotel?.name || "Hotel";
+            const firstOffer = Array.isArray(offerContainer?.offers) ? offerContainer.offers[0] : null;
+            const price = firstOffer?.price?.total || "N/A";
+            const currency = firstOffer?.price?.currency || "";
 
             hotel.innerHTML = `<strong>${name}</strong><br/>Price: ${price} ${currency}`;
             container.appendChild(hotel);
         });
     }
-    if ((mode === 'flights' || mode === 'trip') && data.flights) {
+    if ((mode === 'flights' || mode === 'trip') && data.flights && data.flights.length) {
         const flightTitle = document.createElement("div");
         flightTitle.className = "section-title";
         flightTitle.textContent = "Available Flights";
@@ -32,13 +34,17 @@ function renderSidebar(data, mode) {
             flight.className = "flight";
 
             flight.innerHTML = `
-      From: ${f.origin} → To: ${f.destination}<br/>
-      Departure: ${formatDate(f.departure)}<br/>
-      Price: ${f.price} ${f.currency}<br/>
-      Airline: ${f.airline}
+      From: ${f.origin || "-"} → To: ${f.destination || "-"}<br/>
+      Departure: ${f.departure ? formatDate(f.departure) : "N/A"}<br/>
+      Price: ${f.price || "N/A"} ${f.currency || ""}<br/>
+      Airline: ${f.airline || "N/A"}
     `;
             container.appendChild(flight);
         });
+    }
+
+    if (container.innerHTML.trim() === "") {
+        container.innerHTML = "<p class=\"muted\">No results available for the selected search.</p>";
     }
 }
 

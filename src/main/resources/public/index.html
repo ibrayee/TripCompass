@@ -20,6 +20,8 @@
     <input type="text" id="destination-input" placeholder="Enter destination..." />
     <ul id="destination-suggestions" class="suggestions"></ul>
     <input type="date" id="checkin-input" />
+    <input type="number" id="adults-input" min="1" value="1" aria-label="Adults" />
+    <input type="number" id="rooms-input" min="1" value="1" aria-label="Rooms" />
     <select id="radius-input">
         <option value="50">50 km</option>
         <option value="100">100 km</option>
@@ -27,7 +29,7 @@
     </select>
     <button id="search-btn" onclick="searchCity()">Search</button>
 </header>
-
+<div id="status-banner" class="status-banner"></div>
 <main id="app">
 
     <div id="map"></div>
@@ -40,6 +42,7 @@
 
 <!-- Script -->
 <script src="js/searchBar.js"></script>
+<script src="js/state.js"></script>
 <script src="js/sidebar.js"></script>
 <script src="js/map.js"></script>
 <script src="js/loadGoogleMaps.js"></script>

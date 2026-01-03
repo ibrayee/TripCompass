@@ -1,10 +1,7 @@
-let map, marker, userCoords = null;
+let map, marker;
 let currentMode = 'trip';
 let infoWindow;
 let airportMarkers = [];
-let originAddress = "";
-
-
 
 function setMode(mode) {
     currentMode = mode;
@@ -26,20 +23,29 @@ function initMap() {
     });
     infoWindow = new google.maps.InfoWindow();
 
+    const checkinInput = document.getElementById("checkin-input");
+    if (checkinInput) {
+        const today = new Date();
+        today.setDate(today.getDate() + 1);
+        const iso = today.toISOString().split('T')[0];
+        checkinInput.min = iso;
+        checkinInput.value = checkinInput.value || iso;
+    }
+
     // Geolocalizza utente al load
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                userCoords = {
+                appState.userCoords = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude
                 };
-                console.log("User location:", userCoords);
-                map.setCenter(userCoords);
+                console.log("User location:", appState.userCoords);
+                map.setCenter(appState.userCoords);
                 map.setZoom(10);
 
                 new google.maps.Marker({
-                    position: userCoords,
+                    position: appState.userCoords,
                     map: map,
                     title: "You are here!",
                     icon: {
@@ -52,11 +58,11 @@ function initMap() {
                     }
                 })
                 const geocoder = new google.maps.Geocoder();
-                geocoder.geocode({ location: userCoords }, (results, status) => {
+                geocoder.geocode({location: appState.userCoords}, (results, status) => {
                     if (status === "OK" && results[0]) {
                         const departureInput = document.getElementById("departure-input");
                         departureInput.value = results[0].formatted_address;
-                        originAddress = departureInput.value;
+                        appState.originAddress = departureInput.value;
                     }
                 });
             },
@@ -75,7 +81,7 @@ function initMap() {
                 if (departureInput) {
                     departureInput.value = results[0].formatted_address;
                 }
-                userCoords = { lat, lng };
+                appState.userCoords = {lat, lng};
 
                 const radiusSelect = document.getElementById('radius-input');
                 let radius = radiusSelect && radiusSelect.value ? Number(radiusSelect.value) : 200;
@@ -96,8 +102,8 @@ function initMap() {
                     radius *= 2;
                 }
 
-                if (departureInput && departureInput.value.trim() && typeof destinationCoords !== "undefined" && destinationCoords) {
-                    requestTripInfo(destinationCoords.lat, destinationCoords.lng);
+                if (departureInput && departureInput.value.trim() && appState.destinationCoords) {
+                    requestTripInfo(appState.destinationCoords.lat, appState.destinationCoords.lng);
                 }
             } else {
                 alert("Location not found.");
@@ -109,31 +115,33 @@ function requestTripInfo(destLat, destLng) {
     const departureInput = document.getElementById("departure-input");
     const originValue = departureInput ? departureInput.value.trim() : "";
 
-    if (originValue && originValue !== originAddress) {
+    if (originValue && originValue !== appState.originAddress) {
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ address: originValue }, (results, status) => {
             if (status === "OK" && results[0]) {
                 const loc = results[0].geometry.location;
-                userCoords = { lat: loc.lat(), lng: loc.lng() };
+                appState.userCoords = {lat: loc.lat(), lng: loc.lng()};
                 departureInput.value = results[0].formatted_address;
-                originAddress = departureInput.value;
+                appState.originAddress = departureInput.value;
                 proceed();
             } else {
-                alert("Origin not found.");
+                appState.showError("Origin not found.");
             }
         });
         return;
     }
-    if (!userCoords) {
-        alert("User location not available.");
+    if (!appState.userCoords) {
+        appState.showError("User location not available.");
         return;
     }
 
     proceed();
 
     function proceed() {
-        const originLat = userCoords.lat;
-        const originLng = userCoords.lng;
+        appState.clearError();
+        appState.setLoading(true);
+        const originLat = appState.userCoords.lat;
+        const originLng = appState.userCoords.lng;
         if (marker) marker.setMap(null);
         marker = new google.maps.marker.AdvancedMarkerElement({ position: { lat: destLat, lng: destLng }, map: map });
         airportMarkers.forEach(m => m.setMap(null));
@@ -144,12 +152,31 @@ function requestTripInfo(destLat, destLng) {
         const checkInDate = checkInInput && checkInInput.value
             ? checkInInput.value
             : new Date().toISOString().split('T')[0];
-        const adults = 1;
-        const roomQuantity = 1;
-    if (currentMode === 'flights') {
-        const radiusSelect = document.getElementById('radius-input');
-        const radius = radiusSelect && radiusSelect.value ? radiusSelect.value : 200;
-        Promise.all([
+        const adultsInput = document.getElementById("adults-input");
+        const roomsInput = document.getElementById("rooms-input");
+        const adults = adultsInput ? Math.max(1, Number(adultsInput.value) || 1) : 1;
+        const roomQuantity = roomsInput ? Math.max(1, Number(roomsInput.value) || 1) : 1;
+        const cacheKey = `${currentMode}-${destLat}-${destLng}-${originLat}-${originLng}-${checkInDate}-${adults}-${roomQuantity}`;
+        if (appState.cache.has(cacheKey)) {
+            renderSidebar(appState.cache.get(cacheKey), currentMode);
+            showSidebar();
+            appState.setLoading(false);
+            return;
+        }
+        if (appState.inflight.has(cacheKey)) {
+            appState.inflight.get(cacheKey)
+                .then(data => {
+                    renderSidebar(data, currentMode);
+                    showSidebar();
+                })
+                .catch(err => appState.showError(err.message))
+                .finally(() => appState.setLoading(false));
+            return;
+        }
+        if (currentMode === 'flights') {
+            const radiusSelect = document.getElementById('radius-input');
+            const radius = radiusSelect && radiusSelect.value ? radiusSelect.value : 200;
+            const flightsPromise = Promise.all([
             fetch(`/nearby-airports?lat=${originLat}&lng=${originLng}&limit=5&radius=${radius}`).then(res => {
                 if (!res.ok) throw new Error('Airport lookup failed');
                 return res.json();
@@ -180,6 +207,7 @@ function requestTripInfo(destLat, destLng) {
                     });
                     airportMarkers.push(m);
                 });
+            @@ -183,81 +210,101 @@ function requestTripInfo(destLat, destLng) {
                 destAirports.forEach(ap => {
                     const m = new google.maps.Marker({
                         position: { lat: ap.lat, lng: ap.lng },
@@ -205,44 +233,56 @@ function requestTripInfo(destLat, destLng) {
                 });
             })
             .then(data => {
-                renderSidebar({ flights: data }, currentMode);
+                const payload = {flights: data};
+                appState.cache.set(cacheKey, payload);
+                renderSidebar(payload, currentMode);
                 showSidebar();
             })
             .catch(err => {
                 console.error(err);
                 if (err.message === 'No airports found within selected radius') {
-                    alert("No airport found. Tests only in US/ES/UK/DE/IN. More info: https://example.com/dataset-coverage");
+                    appState.showError("No airport found. Tests only in US/ES/UK/DE/IN. More info: https://example.com/dataset-coverage");
                 } else {
-                    alert("Oops! " + err.message);
+                    appState.showError("Oops! " + err.message);
                 }
                 hideSidebar();
-            });
-        return;
+            })
+                .finally(() => {
+                    appState.inflight.delete(cacheKey);
+                    appState.setLoading(false);
+                });
+            appState.inflight.set(cacheKey, flightsPromise);
+            return;
     }
 
     if (currentMode === 'hotels') {
         const url = `/search/nearby?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
-        fetch(url)
-            .then(res => {
+        const hotelPromise = fetch(url).then(res => {
                 if (!res.ok) throw new Error('Hotel search failed');
                 return res.json();
             })
             .then(data => {
-                renderSidebar({ hotels: data.offers || [] }, currentMode);
+                const payload = {hotels: data.offers || []};
+                appState.cache.set(cacheKey, payload);
+                renderSidebar(payload, currentMode);
                 showSidebar();
             })
             .catch(err => {
                 console.error(err);
-                alert("Oops! " + err.message);
+                appState.showError("Oops! " + err.message);
                 hideSidebar();
+            })
+            .finally(() => {
+                appState.inflight.delete(cacheKey);
+                appState.setLoading(false);
             });
+        appState.inflight.set(cacheKey, hotelPromise);
         return;
     }
 
     const url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}&originLat=${originLat}&originLng=${originLng}`;
 
-    fetch(url)
-        .then(async res => {
+        const tripPromise = fetch(url).then(async res => {
             if (!res.ok) {
                 const error = await res.json();
                 const msg = error.error || error.message || "Unknown error";
@@ -251,13 +291,20 @@ function requestTripInfo(destLat, destLng) {
         })
         .then(data => {
             console.log("Data received from backend:", data);
+            appState.cache.set(cacheKey, data);
             renderSidebar(data, currentMode);
             showSidebar();
         })
         .catch(err => {
             console.error("Trip info fetch failed:", err.message);
-            alert("Oops! " + err.message);
+            appState.showError("Oops! " + err.message);
             hideSidebar();
-        });
+        })
+            .finally(() => {
+                appState.inflight.delete(cacheKey);
+                appState.setLoading(false);
+            });
+        appState.inflight.set(cacheKey, tripPromise);
+
 }
 }

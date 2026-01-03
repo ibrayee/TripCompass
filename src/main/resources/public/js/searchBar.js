@@ -2,7 +2,7 @@ const departureInput = document.getElementById("departure-input");
 const departureSuggestionsEl = document.getElementById("departure-suggestions");
 const destinationInput = document.getElementById("destination-input");
 const destinationSuggestionsEl = document.getElementById("destination-suggestions");
-let destinationCoords = null;
+let suggestionController = null;
 
 function positionSuggestions(inputEl, listEl) {
     const rect = inputEl.getBoundingClientRect();
@@ -11,29 +11,63 @@ function positionSuggestions(inputEl, listEl) {
     listEl.style.width = `${rect.width}px`;
 }
 
+function fetchLocations(query, targetEl, onSelect) {
+    if (suggestionController) {
+        suggestionController.abort();
+    }
+    suggestionController = new AbortController();
+    const signal = suggestionController.signal;
+    const cacheKey = `loc-${query}`;
+    if (appState.cache.has(cacheKey)) {
+        renderSuggestions(appState.cache.get(cacheKey), targetEl, onSelect);
+        return;
+    }
+    fetch(`/search/locations?keyword=${encodeURIComponent(query)}`, { signal })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error("Location search failed");
+            }
+            return res.json();
+        })
+        .then(data => {
+            appState.cache.set(cacheKey, data);
+            renderSuggestions(data, targetEl, onSelect);
+        })
+        .catch(err => {
+            if (err.name === "AbortError") return;
+            console.error(err);
+            targetEl.innerHTML = `<li class="error">Error fetching suggestions</li>`;
+        });
+}
+
+function renderSuggestions(data, listEl, onSelect) {
+    listEl.innerHTML = "";
+    data.forEach(loc => {
+        const li = document.createElement("li");
+        li.textContent = `${loc.name || ""}${loc.iataCode ? ` (${loc.iataCode})` : ""}`;
+        li.addEventListener("click", () => onSelect(loc));
+        listEl.appendChild(li);
+    });
+    if (!data.length) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "No matches";
+        listEl.appendChild(li);
+    }
+}
+
 departureInput.addEventListener("input", () => {
     const query = departureInput.value.trim();
     if (query.length >= 1) {
         positionSuggestions(departureInput, departureSuggestionsEl);
-        fetch(`/search/locations?keyword=${encodeURIComponent(query)}`)
-            .then(res => res.json())
-            .then(data => {
-                departureSuggestionsEl.innerHTML = "";
-                data.forEach(loc => {
-                    const li = document.createElement("li");
-                    li.textContent = `${loc.name}${loc.iataCode ? ` (${loc.iataCode})` : ""}`;
-                    li.addEventListener("click", () => {
-                        departureSuggestionsEl.innerHTML = "";
-                        departureInput.value = loc.name;
-                        userCoords = { lat: loc.lat, lng: loc.lng };
-                        if (destinationCoords) {
-                            requestTripInfo(destinationCoords.lat, destinationCoords.lng, userCoords.lat, userCoords.lng);
-                        }
-                    });
-                    departureSuggestionsEl.appendChild(li);
-                });
-            })
-            .catch(err => console.error(err));
+        fetchLocations(query, departureSuggestionsEl, (loc) => {
+            departureSuggestionsEl.innerHTML = "";
+            departureInput.value = loc.name;
+            appState.userCoords = { lat: loc.lat, lng: loc.lng };
+            if (appState.destinationCoords) {
+                requestTripInfo(appState.destinationCoords.lat, appState.destinationCoords.lng);
+            }
+        });
     } else {
         departureSuggestionsEl.innerHTML = "";
     }
@@ -43,27 +77,16 @@ destinationInput.addEventListener("input", () => {
     const query = destinationInput.value.trim();
     if (query.length >= 1) {
         positionSuggestions(destinationInput, destinationSuggestionsEl);
-        fetch(`/search/locations?keyword=${encodeURIComponent(query)}`)
-            .then(res => res.json())
-            .then(data => {
-                destinationSuggestionsEl.innerHTML = "";
-                data.forEach(loc => {
-                    const li = document.createElement("li");
-                    li.textContent = `${loc.name}${loc.iataCode ? ` (${loc.iataCode})` : ""}`;
-                    li.addEventListener("click", () => {
-                        destinationSuggestionsEl.innerHTML = "";
-                        destinationInput.value = loc.name;
-                        destinationCoords = { lat: loc.lat, lng: loc.lng };
-                        if (userCoords) {
-                            requestTripInfo(destinationCoords.lat, destinationCoords.lng, userCoords.lat, userCoords.lng);
-                        } else {
-                            alert("User location not available.");
-                        }
-                    });
-                    destinationSuggestionsEl.appendChild(li);
-                });
-            })
-            .catch(err => console.error(err));
+        fetchLocations(query, destinationSuggestionsEl, (loc) => {
+            destinationSuggestionsEl.innerHTML = "";
+            destinationInput.value = loc.name;
+            appState.destinationCoords = { lat: loc.lat, lng: loc.lng };
+            if (appState.userCoords) {
+                requestTripInfo(appState.destinationCoords.lat, appState.destinationCoords.lng);
+            } else {
+                appState.showError("User location not available.");
+            }
+        });
     } else {
         destinationSuggestionsEl.innerHTML = "";
     }
@@ -78,7 +101,7 @@ function searchCity() {
             map.setCenter(location);
             requestTripInfo(location.lat(), location.lng());
         } else {
-            alert("City not found. Please try again.");
+            appState.showError("City not found. Please try again.");
         }
     });
 }

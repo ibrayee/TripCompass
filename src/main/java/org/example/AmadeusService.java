@@ -8,19 +8,81 @@ import com.google.gson.Gson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class AmadeusService {
     private static final Logger logger = LoggerFactory.getLogger(AmadeusService.class);
     private final Gson gson = new Gson();
 
     private final Amadeus amadeus;
+    private final ExecutorService executor = Executors.newFixedThreadPool(6);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+    private static final int MAX_RETRIES = 2;
 
     public AmadeusService(String apiKey, String apiSecret) {
         this.amadeus = Amadeus.builder(apiKey, apiSecret).build();
     }
 
-    public String getNearestAirport(double lat, double lng) throws ResponseException {
+    private <T> T executeWithRetry(String operation, Callable<T> action) throws ResponseException, TimeoutException {
+        int attempt = 0;
+        long delayMillis = 300;
+        while (true) {
+            try {
+                return runWithTimeout(action, REQUEST_TIMEOUT);
+            } catch (TimeoutException e) {
+                logger.error("{} timed out on attempt {}", operation, attempt + 1);
+                if (attempt >= MAX_RETRIES) throw e;
+            } catch (ResponseException e) {
+                logger.warn("{} failed with status {} attempt {}", operation, e.getCode(), attempt + 1);
+                if (attempt >= MAX_RETRIES) throw e;
+            } catch (Exception e) {
+                logger.error("{} unexpected error on attempt {}", operation, attempt + 1, e);
+                if (attempt >= MAX_RETRIES) {
+                    if (e instanceof ResponseException re) {
+                        throw re;
+                    }
+                    throw new RuntimeException(e);
+                }
+            }
+            attempt++;
+            try {
+                Thread.sleep(delayMillis);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Interrupted", ie);
+            }
+            delayMillis = Math.min(delayMillis * 2, 2000);
+        }
+    }
+
+    private <T> T runWithTimeout(Callable<T> task, Duration timeout) throws TimeoutException, ResponseException {
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return task.call();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }, executor).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            throw e;
+        } catch (Exception e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof ResponseException re) {
+                throw re;
+            }
+            throw new RuntimeException(cause);
+        }
+    }
+
+    public String getNearestAirport(double lat, double lng) throws ResponseException, TimeoutException {
         String latStr = String.format(Locale.US, "%.6f", lat);
         String lngStr = String.format(Locale.US, "%.6f", lng);
 
@@ -31,7 +93,8 @@ public class AmadeusService {
                 .and("radius", 100)
                 .and("page[limit]", 1);
 
-        Location[] locations = amadeus.referenceData.locations.airports.get(params);
+        Location[] locations = executeWithRetry("Nearest airport", () ->
+                amadeus.referenceData.locations.airports.get(params));
         if (locations != null && locations.length > 0) {
             return locations[0].getIataCode();
         } else {
@@ -40,7 +103,7 @@ public class AmadeusService {
     }
 
 
-    public List<String> getNearbyAirports(double lat, double lng, int radiusKm, int limit) throws ResponseException {
+    public List<String> getNearbyAirports(double lat, double lng, int radiusKm, int limit) throws ResponseException, TimeoutException {
         List<String> airportCodes = new ArrayList<>();
         String latStr = String.format(Locale.US, "%.6f", lat);
         String lngStr = String.format(Locale.US, "%.6f", lng);
@@ -50,7 +113,8 @@ public class AmadeusService {
                 .and("radius", radiusKm)
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.airports.get(params);
+        Location[] results = executeWithRetry("Nearby airports", () ->
+                amadeus.referenceData.locations.airports.get(params));
         if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null) {
@@ -61,7 +125,7 @@ public class AmadeusService {
         return airportCodes;
     }
 
-    public List<Map<String, Object>> getNearbyAirportDetails(double lat, double lng, int radiusKm, int limit) throws ResponseException {
+    public List<Map<String, Object>> getNearbyAirportDetails(double lat, double lng, int radiusKm, int limit) throws ResponseException, TimeoutException {
         List<Map<String, Object>> airports = new ArrayList<>();
         String latStr = String.format(Locale.US, "%.6f", lat);
         String lngStr = String.format(Locale.US, "%.6f", lng);
@@ -71,7 +135,8 @@ public class AmadeusService {
                 .and("radius", radiusKm)
                 .and("page[limit]", limit);
 
-        Location[] results = amadeus.referenceData.locations.airports.get(params);
+        Location[] results = executeWithRetry("Nearby airport details", () ->
+                amadeus.referenceData.locations.airports.get(params));
         if (results != null) {
             for (Location loc : results) {
                 if (loc.getIataCode() != null && loc.getGeoCode() != null) {
@@ -89,7 +154,7 @@ public class AmadeusService {
         return airports;
     }
 
-    public String getFlightOffers(String origin, String destination, String departureDate, String returnDate, int adults) throws ResponseException {
+    public String getFlightOffers(String origin, String destination, String departureDate, String returnDate, int adults) throws ResponseException, TimeoutException {
         Params params = Params.with("originLocationCode", origin)
                 .and("destinationLocationCode", destination)
                 .and("departureDate", departureDate)
@@ -97,27 +162,30 @@ public class AmadeusService {
         if (returnDate != null && !returnDate.isEmpty()) {
             params.and("returnDate", returnDate);
         }
-        var response = amadeus.shopping.flightOffersSearch.get(params);
+        var response = executeWithRetry("Flight offers", () ->
+                amadeus.shopping.flightOffersSearch.get(params));
         return gson.toJson(response);
     }
 
-    public String getHotelsByGeocode(double lat, double lng, int radiusKm) throws ResponseException {
-        var response = amadeus.referenceData.locations.hotels.byGeocode.get(
-                Params.with("latitude", lat)
-                        .and("longitude", lng)
-                        .and("radius", radiusKm)
-                        .and("radiusUnit", "KM")
-        );
+    public String getHotelsByGeocode(double lat, double lng, int radiusKm) throws ResponseException, TimeoutException {
+        var response = executeWithRetry("Hotels by geocode", () ->
+                amadeus.referenceData.locations.hotels.byGeocode.get(
+                        Params.with("latitude", lat)
+                                .and("longitude", lng)
+                                .and("radius", radiusKm)
+                                .and("radiusUnit", "KM")
+                ));
         return gson.toJson(response);
     }
 
-    public String getHotelOffers(String hotelIds, int adults, String checkInDate, int roomQuantity) throws ResponseException {
-        var response = amadeus.shopping.hotelOffersSearch.get(
-                Params.with("hotelIds", hotelIds)
-                        .and("adults", adults)
-                        .and("checkInDate", checkInDate)
-                        .and("roomQuantity", roomQuantity)
-        );
+    public String getHotelOffers(String hotelIds, int adults, String checkInDate, int roomQuantity) throws ResponseException, TimeoutException {
+        var response = executeWithRetry("Hotel offers", () ->
+                amadeus.shopping.hotelOffersSearch.get(
+                        Params.with("hotelIds", hotelIds)
+                                .and("adults", adults)
+                                .and("checkInDate", checkInDate)
+                                .and("roomQuantity", roomQuantity)
+                ));
         return gson.toJson(response);
     }
 
@@ -126,7 +194,8 @@ public class AmadeusService {
             Params params = Params.with("keyword", cityName)
                     .and("subType", "CITY,AIRPORT")
                     .and("page[limit]", 1);
-            Location[] results = amadeus.referenceData.locations.get(params);
+            Location[] results = executeWithRetry("Geocoding city", () ->
+                    amadeus.referenceData.locations.get(params));
 
             if (results != null && results.length > 0 && results[0].getGeoCode() != null) {
                 Location.GeoCode geo = results[0].getGeoCode();
@@ -142,12 +211,13 @@ public class AmadeusService {
         return null;
     }
 
-    public List<Map<String, Object>> searchLocations(String keyword) throws ResponseException {
+    public List<Map<String, Object>> searchLocations(String keyword) throws ResponseException, TimeoutException {
         List<Map<String, Object>> suggestions = new ArrayList<>();
         Params params = Params.with("keyword", keyword)
                 .and("subType", "AIRPORT,CITY")
                 .and("page[limit]", 5);
-        Location[] results = amadeus.referenceData.locations.get(params);
+        Location[] results = executeWithRetry("Search locations", () ->
+                amadeus.referenceData.locations.get(params));
         if (results != null) {
             for (Location loc : results) {
                 Map<String, Object> info = new HashMap<>();
@@ -186,7 +256,8 @@ public class AmadeusService {
                         .and("radius", radius)
                         .and("page[limit]", 1);
 
-                Location[] locations = amadeus.referenceData.locations.airports.get(params);
+                Location[] locations = executeWithRetry("Find nearest airport", () ->
+                        amadeus.referenceData.locations.airports.get(params));
                 logger.debug("Locations result for radius {}: {}", radius, Arrays.toString(locations));
                 if (locations != null && locations.length > 0) {
                     return locations[0].getIataCode();
