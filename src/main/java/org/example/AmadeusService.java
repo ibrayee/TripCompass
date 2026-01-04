@@ -10,12 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
 public class AmadeusService {
     private static final Logger logger = LoggerFactory.getLogger(AmadeusService.class);
@@ -63,22 +58,24 @@ public class AmadeusService {
     }
 
     private <T> T runWithTimeout(Callable<T> task, Duration timeout) throws TimeoutException, ResponseException {
+        Future<T> future = executor.submit(task);
         try {
-            return CompletableFuture.supplyAsync(() -> {
-                try {
-                    return task.call();
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }, executor).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
+            future.cancel(true);
             throw e;
-        } catch (Exception e) {
+        } catch (ExecutionException e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             if (cause instanceof ResponseException re) {
                 throw re;
             }
+            if (cause instanceof RuntimeException re) {
+                throw re;
+            }
             throw new RuntimeException(cause);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted", e);
         }
     }
 

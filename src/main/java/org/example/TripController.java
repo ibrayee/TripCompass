@@ -404,14 +404,23 @@ public class TripController {
                         hotelData.put("offers", JsonParser.parseString(offerJson));
                         validOffers.add(hotelData);
                     } catch (ResponseException e) {
-                        logger.info("[SKIP] {} => {}", hotelId, e.getMessage());
+                        if ("429".equals(e.getCode())) {
+                            logger.warn("Rate limit exceeded while fetching offers for {}: {}", hotelId, e.getMessage());
+                            ctx.status(429).result("Rate limit exceeded, retry later");
+                            return;
+                        }
+                        if ("400".equals(e.getCode())) {
+                            logger.info("Skipping hotel {} due to upstream bad request: {}", hotelId, e.getMessage());
+                            continue;
+                        }
+                        logger.warn("Failed to fetch offers for {}: {}", hotelId, e.getMessage());
                     }
                 }
                 if (validOffers.size() >= 5) break;
             }
 
             if (validOffers.isEmpty()) {
-                ctx.status(404).result("No available hotel offers for the selected location and date.");
+                ctx.status(404).result("No available hotel offers");
                 return;
             }
 
@@ -421,6 +430,14 @@ public class TripController {
 
             ctx.contentType("application/json");
             ctx.result(new Gson().toJson(response));
+        } catch (ResponseException e) {
+            if ("429".equals(e.getCode())) {
+                logger.warn("Rate limit exceeded while searching hotels: {}", e.getMessage());
+                ctx.status(429).result("Rate limit exceeded, retry later");
+                return;
+            }
+            logger.error("Upstream service error during nearby search: {}", e.getMessage());
+            ctx.status(502).result("Upstream service error: " + e.getMessage());
         } catch (TimeoutException e) {
             logger.error("Nearby hotels request timed out", e);
             ctx.status(504).result("Request timed out");
