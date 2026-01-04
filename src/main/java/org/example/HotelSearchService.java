@@ -45,6 +45,7 @@ public class HotelSearchService {
             return Collections.emptyList();
         }
 
+        // reuse cached hotels so we do not hammer the API
         CacheEntry cached = hotelCache.get(query.cacheKey());
         if (cached != null && !cached.isExpired(config.cacheTtl())) {
             return cached.results();
@@ -137,6 +138,7 @@ public class HotelSearchService {
             return tokenCache.accessToken();
         }
 
+        // quick auth call to Amadeus, nothing fancy
         RequestBody body = new FormBody.Builder()
                 .add("grant_type", "client_credentials")
                 .add("client_id", config.amadeusApiKey())

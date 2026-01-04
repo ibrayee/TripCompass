@@ -41,6 +41,7 @@ public class TripInfoService {
             int adults,
             int rooms
     ) throws ResponseException, TimeoutException {
+        // quick geocode so we can jump from city text to airport
         double[] originCoords = amadeusService.geocodeCityToCoords(originCity);
         if (originCoords == null) throw new IllegalArgumentException("Could not geolocate origin city");
 
@@ -82,6 +83,7 @@ public class TripInfoService {
             int adults,
             int rooms
     ) throws ResponseException, TimeoutException {
+        // keep the happy path short and log the key context
         logger.info("Starting trip-info for destination ({}, {}) from {} at {}", lat, lng, originAirport, checkInDate);
         logger.debug("Looking up nearest airport for destination");
         String destinationAirport = amadeusService.getNearestAirport(lat, lng);
@@ -108,6 +110,7 @@ public class TripInfoService {
                 .getAsJsonArray();
 
         if (flightArray.size() == 0) {
+            // simple fallback so user still gets something
             logger.warn("No direct flights found, trying fallback airports...");
             List<String> altOrigins = amadeusService.getNearbyAirports(originCoords[0], originCoords[1], 100, 3);
             List<String> altDests = amadeusService.getNearbyAirports(lat, lng, 100, 3);
@@ -229,6 +232,7 @@ public class TripInfoService {
                     return hotelOffers;
                 }
             } catch (Exception e) {
+                // if the fast HTTP client fails we still try legacy flow
                 logger.warn("Fast hotel summary lookup failed, falling back: {}", e.getMessage());
             }
         }

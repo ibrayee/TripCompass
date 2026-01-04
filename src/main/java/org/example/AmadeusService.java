@@ -30,6 +30,7 @@ public class AmadeusService {
         long delayMillis = 300;
         while (true) {
             try {
+                // small helper so every call has timeout and retry
                 return runWithTimeout(action, REQUEST_TIMEOUT);
             } catch (TimeoutException e) {
                 logger.error("{} timed out on attempt {}", operation, attempt + 1);
