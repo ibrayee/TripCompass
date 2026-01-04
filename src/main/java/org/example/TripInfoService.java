@@ -22,9 +22,11 @@ import java.util.concurrent.TimeoutException;
 public class TripInfoService {
     private static final Logger logger = LoggerFactory.getLogger(TripInfoService.class);
     private final AmadeusService amadeusService;
+    private final HotelSearchService hotelSearchService;
 
-    public TripInfoService(AmadeusService amadeusService) {
+    public TripInfoService(AmadeusService amadeusService, HotelSearchService hotelSearchService) {
         this.amadeusService = amadeusService;
+        this.hotelSearchService = hotelSearchService;
     }
 
     /**
@@ -98,30 +100,7 @@ public class TripInfoService {
 
 
         // 3. Search hotel offers (limit to top 3)
-        List<Map<String, Object>> hotelOffers = new ArrayList<>();
-        JsonArray hotelArray = JsonParser
-                .parseString(amadeusService.getHotelsByGeocode(lat, lng, 10))
-                .getAsJsonArray();
-        for (JsonElement element : hotelArray) {
-            if (!element.isJsonObject()) continue;
-            JsonObject hotelObj = element.getAsJsonObject();
-            if (!hotelObj.has("hotelId")) continue;
-            String hotelId = hotelObj.get("hotelId").getAsString();
-            try {
-                String offersJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms, checkOutDate);
-                JsonElement parsedOffers = JsonParser.parseString(offersJson);
-                if (!parsedOffers.isJsonArray() || parsedOffers.getAsJsonArray().size() == 0) {
-                    continue;
-                }
-                Map<String, Object> hotelData = new HashMap<>();
-                hotelData.put("hotelId", hotelId);
-                hotelData.put("offers", new Gson().fromJson(parsedOffers, Object.class));
-                hotelOffers.add(hotelData);
-                if (hotelOffers.size() >= 3) break;
-            } catch (ResponseException e) {
-                logger.debug("Skipping unavailable hotel {}: {}", hotelId, e.getMessage());
-            }
-        }
+        List<Map<String, Object>> hotelOffers = fetchHotelSummaries(lat, lng, checkInDate, checkOutDate, adults, rooms);
 
         // 4. Search flight offers (with fallback)
         JsonArray flightArray = JsonParser
@@ -234,5 +213,79 @@ public class TripInfoService {
         response.put("hotels", hotelOffers);
         response.put("flights", simplifiedFlightObject);
         return response;
+    }
+
+    private List<Map<String, Object>> fetchHotelSummaries(double lat, double lng, String checkInDate, String checkOutDate, int adults, int rooms) {
+        List<Map<String, Object>> hotelOffers = new ArrayList<>();
+        if (hotelSearchService != null) {
+            try {
+                List<HotelSearchService.HotelSummary> summaries = hotelSearchService.searchHotels(
+                        new HotelSearchService.HotelQuery(lat, lng, checkInDate, checkOutDate, adults, rooms, 10));
+                for (HotelSearchService.HotelSummary summary : summaries) {
+                    hotelOffers.add(toHotelPayload(summary));
+                    if (hotelOffers.size() >= 3) break;
+                }
+                if (!hotelOffers.isEmpty()) {
+                    return hotelOffers;
+                }
+            } catch (Exception e) {
+                logger.warn("Fast hotel summary lookup failed, falling back: {}", e.getMessage());
+            }
+        }
+
+        try {
+            JsonArray hotelArray = JsonParser
+                    .parseString(amadeusService.getHotelsByGeocode(lat, lng, 10))
+                    .getAsJsonArray();
+            for (JsonElement element : hotelArray) {
+                if (!element.isJsonObject()) continue;
+                JsonObject hotelObj = element.getAsJsonObject();
+                if (!hotelObj.has("hotelId")) continue;
+                String hotelId = hotelObj.get("hotelId").getAsString();
+                try {
+                    String offersJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms, checkOutDate);
+                    JsonElement parsedOffers = JsonParser.parseString(offersJson);
+                    if (!parsedOffers.isJsonArray() || parsedOffers.getAsJsonArray().size() == 0) {
+                        continue;
+                    }
+                    Map<String, Object> hotelData = new HashMap<>();
+                    hotelData.put("hotelId", hotelId);
+                    hotelData.put("offers", new Gson().fromJson(parsedOffers, Object.class));
+                    hotelOffers.add(hotelData);
+                    if (hotelOffers.size() >= 3) break;
+                } catch (ResponseException e) {
+                    logger.debug("Skipping unavailable hotel {}: {}", hotelId, e.getMessage());
+                }
+            }
+        } catch (TimeoutException | ResponseException e) {
+            logger.warn("Legacy hotel lookup failed: {}", e.getMessage());
+        }
+        return hotelOffers;
+    }
+
+    private Map<String, Object> toHotelPayload(HotelSearchService.HotelSummary summary) {
+        Map<String, Object> hotelData = new HashMap<>();
+        Map<String, Object> hotelInfo = new HashMap<>();
+        hotelInfo.put("name", summary.name());
+        hotelInfo.put("latitude", summary.lat());
+        hotelInfo.put("longitude", summary.lng());
+        hotelInfo.put("address", summary.address());
+        if (summary.rating() != null && !summary.rating().isBlank()) {
+            hotelInfo.put("rating", summary.rating());
+        }
+
+        Map<String, Object> price = new HashMap<>();
+        price.put("total", summary.priceTotal());
+        price.put("currency", summary.currency());
+
+        Map<String, Object> offerContainer = new HashMap<>();
+        offerContainer.put("hotel", hotelInfo);
+        offerContainer.put("offers", List.of(Map.of("price", price)));
+        offerContainer.put("mapsLink", summary.mapsLink());
+
+        hotelData.put("hotelId", summary.id());
+        hotelData.put("offers", List.of(offerContainer));
+        hotelData.put("map", Map.of("lat", summary.lat(), "lng", summary.lng(), "link", summary.mapsLink()));
+        return hotelData;
     }
 }

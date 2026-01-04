@@ -4,6 +4,7 @@ let infoWindow;
 let airportMarkers = [];
 let routePolyline = null;
 let cachedCheckinMin = null;
+let hotelMarkers = [];
 
 function setMode(mode) {
     currentMode = mode;
@@ -11,6 +12,9 @@ function setMode(mode) {
     const activeBtn = document.getElementById(`mode-${mode}`);
     if (activeBtn) {
         activeBtn.classList.add('active');
+    }
+    if (mode === 'flights') {
+        clearHotelMarkers();
     }
     updateModeUI(mode);
 }
@@ -139,6 +143,39 @@ function clearRouteLine() {
     if (routePolyline) {
         routePolyline.setMap(null);
         routePolyline = null;
+    }
+}
+function clearHotelMarkers() {
+    hotelMarkers.forEach(m => m.setMap(null));
+    hotelMarkers = [];
+}
+
+function drawHotelMarkers(hotels) {
+    if (!map || !Array.isArray(hotels)) return;
+    clearHotelMarkers();
+    const bounds = new google.maps.LatLngBounds();
+    hotels.forEach(h => {
+        const offerContainer = Array.isArray(h.offers) ? h.offers[0] : null;
+        const hotelInfo = offerContainer?.hotel || {};
+        const lat = Number(hotelInfo.latitude);
+        const lng = Number(hotelInfo.longitude);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+        const title = hotelInfo.name || "Hotel";
+        const marker = new google.maps.Marker({
+            position: { lat, lng },
+            map,
+            title
+        });
+        const price = (offerContainer?.offers && offerContainer.offers[0]?.price) || {};
+        const info = new google.maps.InfoWindow({
+            content: `<div><strong>${title}</strong><br/>${hotelInfo.address || ''}<br/>${price.total ? `${price.total} ${price.currency || ''}` : ''}</div>`
+        });
+        marker.addListener("click", () => info.open({ map, anchor: marker }));
+        hotelMarkers.push(marker);
+        bounds.extend(marker.getPosition());
+    });
+    if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, 60);
     }
 }
 
@@ -326,8 +363,9 @@ function requestTripInfo(destLat, destLng) {
                 return res.json();
             })
                 .then(data => {
-                    const payload = { hotels: data.offers || [] };
+                    const payload = { hotels: data.offers || [], coordinates: data.coordinates, meta: data.meta };
                     appState.cache.set(cacheKey, payload);
+                    drawHotelMarkers(payload.hotels);
                     renderSidebar(payload, currentMode);
                     showSidebar();
                 })
@@ -356,6 +394,9 @@ function requestTripInfo(destLat, destLng) {
         })
             .then(data => {
                 appState.cache.set(cacheKey, data);
+                if (data.hotels) {
+                    drawHotelMarkers(data.hotels);
+                }
                 renderSidebar(data, currentMode);
                 showSidebar();
             })

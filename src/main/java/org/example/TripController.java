@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
+import org.example.HotelSearchService.HotelSummary;
 import io.javalin.http.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,9 +29,9 @@ public class TripController {
 
     // Load environment variables for Amadeus API
     private static final Dotenv dotenv = Dotenv.configure().load();
-    private static final String AMADEUS_API_KEY = dotenv.get("AMADEUS_API_KEY");
-    private static final String AMADEUS_API_SECRET = dotenv.get("AMADEUS_API_SECRET");
-    private static final String GOOGLE_MAPS_API_KEY = dotenv.get("GOOGLE_MAPS_API_KEY");
+    private static final AppConfig config = new AppConfig(dotenv);
+    private static final String AMADEUS_API_KEY = config.amadeusApiKey();
+    private static final String AMADEUS_API_SECRET = config.amadeusApiSecret();
 
     private static final Logger logger = LoggerFactory.getLogger(TripController.class);
 
@@ -41,8 +42,11 @@ public class TripController {
     private static final AmadeusService amadeusService = AMADEUS_ENABLED
             ? new AmadeusService(AMADEUS_API_KEY, AMADEUS_API_SECRET)
             : null;
+    private static final HotelSearchService hotelSearchService = AMADEUS_ENABLED
+            ? new HotelSearchService(config)
+            : null;
     private static final TripInfoService tripInfoService = amadeusService != null
-            ? new TripInfoService(amadeusService)
+            ? new TripInfoService(amadeusService, hotelSearchService)
             : null;
 
     private static boolean ensureAmadeusConfigured(Context ctx) {
@@ -74,10 +78,10 @@ public class TripController {
         // Health check
         app.get("/hello", ctx -> ctx.result("Hello TripCompass!"));
         app.get("/config/maps-key", ctx -> {
-            if (GOOGLE_MAPS_API_KEY == null || GOOGLE_MAPS_API_KEY.isBlank()) {
+            if (config.googleMapsApiKey().isEmpty()) {
                 ctx.status(404).json(Map.of("error", "Google Maps API key not configured"));
             } else {
-                ctx.json(Map.of("apiKey", GOOGLE_MAPS_API_KEY));
+                ctx.json(Map.of("apiKey", config.googleMapsApiKey().orElse("")));
             }
         });
 
@@ -357,6 +361,7 @@ public class TripController {
         String checkOutDate = ctx.queryParam("checkOutDate");
         String adultsStr = ctx.queryParam("adults") != null ? ctx.queryParam("adults").trim() : null;
         String roomQuantityStr = ctx.queryParam("roomQuantity") != null ? ctx.queryParam("roomQuantity").trim() : null;
+        String radiusStr = ctx.queryParam("radiusKm");
 
         logger.debug("Nearby search lat={}, lng={}, checkInDate={}, adults={}, roomQuantity={}", latStr, lngStr, checkInDate, adultsStr, roomQuantityStr);
 
@@ -386,7 +391,75 @@ public class TripController {
             double lng = Double.parseDouble(lngStr);
             int adults = Integer.parseInt(adultsStr);
             int rooms = Integer.parseInt(roomQuantityStr);
+            double radiusKm = config.searchRadiusKm();
+            if (radiusStr != null && !radiusStr.isBlank()) {
+                try {
+                    radiusKm = Double.parseDouble(radiusStr);
+                } catch (NumberFormatException ignored) {
+                }
+            }
 
+            if (hotelSearchService != null) {
+                try {
+                    var fastResults = hotelSearchService.searchHotels(
+                            new HotelSearchService.HotelQuery(lat, lng, checkInDate, checkOutDate, adults, rooms, radiusKm));
+                    if (!fastResults.isEmpty()) {
+                        List<Map<String, Object>> hotels = normalizeHotelSummaries(fastResults);
+                        Map<String, Object> response = new HashMap<>();
+                        response.put("coordinates", Map.of("lat", lat, "lng", lng));
+                        response.put("offers", hotels);
+                        response.put("meta", Map.of(
+                                "count", hotels.size(),
+                                "radiusKm", radiusKm
+                        ));
+                        ctx.json(response);
+                        return;
+                    }
+                    logger.info("Fast hotel search returned no results, falling back to legacy flow");
+                } catch (Exception ex) {
+                    logger.warn("Fast hotel search failed, falling back to legacy flow: {}", ex.getMessage());
+                }
+            }
+
+            runLegacyNearbySearch(ctx, lat, lng, checkInDate, checkOutDate, adults, rooms);
+        } catch (Exception e) {
+            logger.error("Unexpected error while searching nearby hotels", e);
+            ctx.status(500).result("Internal Server Error: " + e.getMessage());
+        }
+    }
+
+    private static List<Map<String, Object>> normalizeHotelSummaries(List<HotelSummary> summaries) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (HotelSummary summary : summaries) {
+            Map<String, Object> hotel = new HashMap<>();
+            Map<String, Object> hotelInfo = new HashMap<>();
+            hotelInfo.put("name", summary.name());
+            hotelInfo.put("latitude", summary.lat());
+            hotelInfo.put("longitude", summary.lng());
+            hotelInfo.put("address", summary.address());
+            if (summary.rating() != null && !summary.rating().isBlank()) {
+                hotelInfo.put("rating", summary.rating());
+            }
+
+            Map<String, Object> price = new HashMap<>();
+            price.put("total", summary.priceTotal());
+            price.put("currency", summary.currency());
+
+            Map<String, Object> offerContainer = new HashMap<>();
+            offerContainer.put("hotel", hotelInfo);
+            offerContainer.put("offers", List.of(Map.of("price", price)));
+            offerContainer.put("mapsLink", summary.mapsLink());
+
+            hotel.put("hotelId", summary.id());
+            hotel.put("offers", List.of(offerContainer));
+            hotel.put("map", Map.of("lat", summary.lat(), "lng", summary.lng(), "link", summary.mapsLink()));
+            results.add(hotel);
+        }
+        return results;
+    }
+
+    private static void runLegacyNearbySearch(Context ctx, double lat, double lng, String checkInDate, String checkOutDate, int adults, int rooms) {
+        try {
             String hotelResponseJson = amadeusService.getHotelsByGeocode(lat, lng, 10);
             JsonArray hotelArray = JsonParser.parseString(hotelResponseJson).getAsJsonArray();
 
