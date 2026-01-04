@@ -127,7 +127,7 @@ public class TripController {
             return;
         }
 
-        public class TripController {
+        try {
             double lat = Double.parseDouble(latStr.trim().replace(",", "."));
             double lng = Double.parseDouble(lngStr.trim().replace(",", "."));
             int adults = Integer.parseInt(adultsStr.trim());
@@ -324,7 +324,8 @@ public class TripController {
                 simplified.add("segments", legs);
                 if (stopovers.size() > 0) {
                     simplified.add("stopovers", stopovers);
-                }                simplifiedArray.add(simplified);
+                }
+                simplifiedArray.add(simplified);
             }
 
             ctx.contentType("application/json");
@@ -420,6 +421,7 @@ public class TripController {
             ctx.status(500).result("Internal Server Error: " + e.getMessage());
         }
     }
+
     private static void handleNearbyAirports(Context ctx) {
         if (!ensureAmadeusConfigured(ctx)) return;
         String latStr = ctx.queryParam("lat");
@@ -443,42 +445,43 @@ public class TripController {
             }
         }
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
-            ctx.status(400).json(Map.of("error", "Invalid coordinates"));            return;
+            ctx.status(400).json(Map.of("error", "Invalid coordinates"));
+            return;
         }
         try {
             double lat = Double.parseDouble(latStr);
-            @@ -368,33 +451,34 @@ public class TripController {
+            double lng = Double.parseDouble(lngStr);
 
-                List<Map<String, Object>> airports =
-                        amadeusService.getNearbyAirportDetails(lat, lng, radius, limit);
+            List<Map<String, Object>> airports =
+                    amadeusService.getNearbyAirportDetails(lat, lng, radius, limit);
             if (airports.isEmpty()) {
-                    String nearestCode = amadeusService.findNearestAirportCode(lat, lng, radius);
-                    if (nearestCode != null) {
-                        List<Map<String, Object>> fallback =
-                                amadeusService.getNearbyAirportDetails(lat, lng, 1000, 1);
-                        if (!fallback.isEmpty()) {
-                            ctx.json(fallback);
-                        } else {
-                            ctx.json(List.of(Map.of("iata", nearestCode)));
-                        }
-                        return;
+                String nearestCode = amadeusService.findNearestAirportCode(lat, lng, radius);
+                if (nearestCode != null) {
+                    List<Map<String, Object>> fallback =
+                            amadeusService.getNearbyAirportDetails(lat, lng, 1000, 1);
+                    if (!fallback.isEmpty()) {
+                        ctx.json(fallback);
+                    } else {
+                        ctx.json(List.of(Map.of("iata", nearestCode)));
                     }
-
-                    ctx.status(404).json(
-                            Map.of("error", "Dataset di test limitato a US/ES/UK/DE/IN")
-                    );
                     return;
                 }
 
-            ctx.json(airports);
-            } catch (ResponseException e) {
-                ctx.status(502).json(Map.of("error", "Upstream service error"));
-            } catch (TimeoutException e) {
-                ctx.status(504).json(Map.of("error", "Request timed out"));
-            } catch (Exception e) {
-                ctx.status(500).json(
-                        Map.of("error", "Internal Server Error", "message", e.getMessage())
+                ctx.status(404).json(
+                        Map.of("error", "Dataset di test limitato a US/ES/UK/DE/IN")
                 );
+                return;
             }
+
+            ctx.json(airports);
+        } catch (ResponseException e) {
+            ctx.status(502).json(Map.of("error", "Upstream service error"));
+        } catch (TimeoutException e) {
+            ctx.status(504).json(Map.of("error", "Request timed out"));
+        } catch (Exception e) {
+            ctx.status(500).json(
+                    Map.of("error", "Internal Server Error", "message", e.getMessage())
+            );
         }
     }
+}
