@@ -35,6 +35,7 @@ public class TripInfoService {
             double lng,
             String originCity,
             String checkInDate,
+            String checkOutDate,
             int adults,
             int rooms
     ) throws ResponseException, TimeoutException {
@@ -44,7 +45,7 @@ public class TripInfoService {
         String originAirport = amadeusService.getNearestAirport(originCoords[0], originCoords[1]);
         if (originAirport == null) throw new IllegalStateException("No origin airport found");
 
-        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms);
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, checkOutDate, adults, rooms);
     }
 
     /**
@@ -57,6 +58,7 @@ public class TripInfoService {
             double originLat,
             double originLng,
             String checkInDate,
+            String checkOutDate,
             int adults,
             int rooms
     ) throws ResponseException, TimeoutException {
@@ -65,7 +67,7 @@ public class TripInfoService {
             originAirport = amadeusService.getNearestAirport(originLat, originLng);
             if (originAirport == null) throw new IllegalStateException("No origin airport found");
         }
-        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms);
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, checkOutDate, adults, rooms);
     }
 
     private Map<String, Object> getTripInfoInternal(
@@ -74,6 +76,7 @@ public class TripInfoService {
             String originAirport,
             double[] originCoords,
             String checkInDate,
+            String checkOutDate,
             int adults,
             int rooms
     ) throws ResponseException, TimeoutException {
@@ -105,7 +108,7 @@ public class TripInfoService {
             if (!hotelObj.has("hotelId")) continue;
             String hotelId = hotelObj.get("hotelId").getAsString();
             try {
-                String offersJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms);
+                String offersJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms, checkOutDate);
                 JsonElement parsedOffers = JsonParser.parseString(offersJson);
                 if (!parsedOffers.isJsonArray() || parsedOffers.getAsJsonArray().size() == 0) {
                     continue;

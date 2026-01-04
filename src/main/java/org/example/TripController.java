@@ -108,6 +108,7 @@ public class TripController {
         String originLatStr = ctx.queryParam("originLat");
         String originLngStr = ctx.queryParam("originLng");
         String checkInDate = ctx.queryParam("checkInDate");
+        String checkOutDate = ctx.queryParam("checkOutDate");
         String adultsStr = ctx.queryParam("adults");
         String roomQuantityStr = ctx.queryParam("roomQuantity");
 
@@ -115,11 +116,13 @@ public class TripController {
                 && ValidationUtils.isValidCoordinates(originLatStr, originLngStr);
 
         boolean hasOrigin = origin != null && !origin.isEmpty();
+        boolean hasCheckout = checkOutDate != null && !checkOutDate.isBlank();
 
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)
                 || !ValidationUtils.isFutureDate(checkInDate)
                 || !ValidationUtils.isPositiveInteger(adultsStr)
                 || !ValidationUtils.isPositiveInteger(roomQuantityStr)
+                || (hasCheckout && !ValidationUtils.isValidDateRange(checkInDate, checkOutDate))
                 || (!hasOrigin && !hasOriginCoords)) {
             ctx.status(400).json(Map.of(
                     "error", "Missing or invalid parameters"
@@ -158,11 +161,11 @@ public class TripController {
             Map<String, Object> result;
             if (hasOriginCoords) {
                 result = tripInfoService.getTripInfo(
-                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, adults, rooms
+                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, checkOutDate, adults, rooms
                 );
             } else {
                 result = tripInfoService.getTripInfo(
-                        lat, lng, resolvedOrigin, checkInDate, adults, rooms
+                        lat, lng, resolvedOrigin, checkInDate, checkOutDate,adults, rooms
                 );
             }
 
@@ -351,6 +354,7 @@ public class TripController {
         String latStr = ctx.queryParam("lat");
         String lngStr = ctx.queryParam("lng");
         String checkInDate = ctx.queryParam("checkInDate");
+        String checkOutDate = ctx.queryParam("checkOutDate");
         String adultsStr = ctx.queryParam("adults") != null ? ctx.queryParam("adults").trim() : null;
         String roomQuantityStr = ctx.queryParam("roomQuantity") != null ? ctx.queryParam("roomQuantity").trim() : null;
 
@@ -362,6 +366,10 @@ public class TripController {
         }
         if (!ValidationUtils.isFutureDate(checkInDate)) {
             ctx.status(400).result("Invalid parameters: check-in date is not valid.");
+            return;
+        }
+        if (checkOutDate != null && !checkOutDate.isBlank() && !ValidationUtils.isValidDateRange(checkInDate, checkOutDate)) {
+            ctx.status(400).result("Invalid parameters: check-out date is not valid.");
             return;
         }
         if (!ValidationUtils.isPositiveInteger(adultsStr)) {
@@ -390,7 +398,7 @@ public class TripController {
                 if (hotelObj.has("hotelId")) {
                     String hotelId = hotelObj.get("hotelId").getAsString();
                     try {
-                        String offerJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms);
+                        String offerJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms, checkOutDate);
                         Map<String, Object> hotelData = new HashMap<>();
                         hotelData.put("hotelId", hotelId);
                         hotelData.put("offers", JsonParser.parseString(offerJson));

@@ -19,7 +19,7 @@
         </div>
     </div>
 
-    <div class="field-group wide">
+    <div class="field-group wide" id="departure-group">
         <label id="departure-label" class="field-label" for="departure-input">
             <span id="departure-label-text">Departure</span>
             <span id="departure-help" class="help-badge" tabindex="0" data-tooltip="City or airport you will leave from.">?</span>
@@ -44,7 +44,13 @@
         </label>
         <input type="date" id="checkin-input" />
     </div>
-
+    <div class="field-group" id="checkout-group">
+        <label id="checkout-label" class="field-label" for="checkout-input">
+            <span id="checkout-label-text">Check-out date</span>
+            <span id="checkout-help" class="help-badge" tabindex="0" data-tooltip="Pick when you plan to leave the hotel.">?</span>
+        </label>
+        <input type="date" id="checkout-input" />
+    </div>
     <div class="field-group compact">
         <label id="adults-label" class="field-label" for="adults-input">
             <span id="adults-label-text">Adults</span>
@@ -83,13 +89,11 @@
 
     <div id="map"></div>
 
-    <!-- Sidebar nascosta di default -->
     <aside id="sidebar" class="hidden">
         <div id="results"></div>
     </aside>
 </main>
 
-<!-- Script -->
 <script src="js/searchBar.js"></script>
 <script src="js/state.js"></script>
 <script src="js/sidebar.js"></script>

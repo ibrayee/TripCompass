@@ -3,6 +3,7 @@ let currentMode = 'trip';
 let infoWindow;
 let airportMarkers = [];
 let routePolyline = null;
+let cachedCheckinMin = null;
 
 function setMode(mode) {
     currentMode = mode;
@@ -36,14 +37,30 @@ function initMap() {
     infoWindow = new google.maps.InfoWindow();
 
     const checkinInput = document.getElementById("checkin-input");
+    const checkoutInput = document.getElementById("checkout-input");
     if (checkinInput) {
         const today = new Date();
         today.setDate(today.getDate() + 1);
         const iso = today.toISOString().split('T')[0];
+        cachedCheckinMin = iso;
         checkinInput.min = iso;
         checkinInput.value = checkinInput.value || iso;
     }
-
+    if (checkoutInput) {
+        const updateCheckoutMin = () => {
+            const checkinVal = checkinInput?.value || cachedCheckinMin;
+            if (!checkinVal) return;
+            const checkoutDate = new Date(checkinVal);
+            checkoutDate.setDate(checkoutDate.getDate() + 1);
+            const checkoutIso = checkoutDate.toISOString().split("T")[0];
+            checkoutInput.min = checkoutIso;
+            if (!checkoutInput.value || checkoutInput.value < checkoutIso) {
+                checkoutInput.value = checkoutIso;
+            }
+        };
+        updateCheckoutMin();
+        checkinInput?.addEventListener("change", updateCheckoutMin);
+    }
     // Geolocate user on load
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -146,7 +163,11 @@ function requestTripInfo(destLat, destLng) {
     const departureInput = document.getElementById("departure-input");
     const originValue = departureInput ? departureInput.value.trim() : "";
 
-    if (originValue && originValue !== appState.originAddress) {
+    const checkinInput = document.getElementById("checkin-input");
+    const checkoutInput = document.getElementById("checkout-input");
+    const checkOutDate = checkoutInput && checkoutInput.value ? checkoutInput.value : "";
+
+    if (currentMode !== 'hotels' && originValue && originValue !== appState.originAddress) {
         const geocoder = new google.maps.Geocoder();
         geocoder.geocode({ address: originValue }, (results, status) => {
             if (status === "OK" && results[0]) {
@@ -164,7 +185,7 @@ function requestTripInfo(destLat, destLng) {
         return;
     }
 
-    if (!appState.userCoords) {
+    if (!appState.userCoords && currentMode !== 'hotels') {
         appState.showError("User location not available.");
         return;
     }
@@ -174,24 +195,27 @@ function requestTripInfo(destLat, destLng) {
     function proceed() {
         appState.clearError();
         appState.setLoading(true);
-        const originLat = appState.userCoords.lat;
-        const originLng = appState.userCoords.lng;
+        const originLat = appState.userCoords?.lat ?? null;
+        const originLng = appState.userCoords?.lng ?? null;
         appState.destinationCoords = { lat: destLat, lng: destLng };
 
         placeDestinationMarker(destLat, destLng);
-        drawRouteLine(appState.userCoords, appState.destinationCoords);
+        if (appState.userCoords && currentMode !== 'hotels') {
+            drawRouteLine(appState.userCoords, appState.destinationCoords);
+        } else {
+            clearRouteLine();
+        }
         airportMarkers.forEach(m => m.setMap(null));
         airportMarkers = [];
 
-        const checkInInput = document.getElementById("checkin-input");
-        const checkInDate = checkInInput && checkInInput.value
-            ? checkInInput.value
+        const checkInDate = checkinInput && checkinInput.value
+            ? checkinInput.value
             : new Date().toISOString().split('T')[0];
         const adultsInput = document.getElementById("adults-input");
         const roomsInput = document.getElementById("rooms-input");
         const adults = adultsInput ? Math.max(1, Number(adultsInput.value) || 1) : 1;
         const roomQuantity = roomsInput ? Math.max(1, Number(roomsInput.value) || 1) : 1;
-        const cacheKey = `${currentMode}-${destLat}-${destLng}-${originLat}-${originLng}-${checkInDate}-${adults}-${roomQuantity}`;
+        const cacheKey = `${currentMode}-${destLat}-${destLng}-${originLat ?? "no-origin"}-${originLng ?? "no-origin"}-${checkInDate}-${checkOutDate || "no-checkout"}-${adults}-${roomQuantity}`;
 
         if (appState.cache.has(cacheKey)) {
             renderSidebar(appState.cache.get(cacheKey), currentMode);
@@ -295,7 +319,8 @@ function requestTripInfo(destLat, destLng) {
         }
 
         if (currentMode === 'hotels') {
-            const url = `/search/nearby?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}`;
+            const url = `/search/nearby?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}` +
+                (checkOutDate ? `&checkOutDate=${checkOutDate}` : "");
             const hotelPromise = fetch(url).then(res => {
                 if (!res.ok) throw new Error('Hotel search failed');
                 return res.json();
@@ -319,7 +344,8 @@ function requestTripInfo(destLat, destLng) {
             return;
         }
 
-        const url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}&originLat=${originLat}&originLng=${originLng}`;
+        const url = `/trip-info?lat=${destLat}&lng=${destLng}&checkInDate=${checkInDate}&adults=${adults}&roomQuantity=${roomQuantity}&originLat=${originLat}&originLng=${originLng}` +
+            (checkOutDate ? `&checkOutDate=${checkOutDate}` : "");
         const tripPromise = fetch(url).then(async res => {
             if (!res.ok) {
                 const error = await res.json();
@@ -395,13 +421,18 @@ function updateModeUI(mode = 'trip') {
     const adultsHelp = document.getElementById("adults-help");
     const roomsHelp = document.getElementById("rooms-help");
     const radiusHelp = document.getElementById("radius-help");
+    const checkoutHelp = document.getElementById("checkout-help");
     const roomsGroup = document.getElementById("rooms-group");
+    const departureGroup = document.getElementById("departure-group");
+    const checkoutGroup = document.getElementById("checkout-group");
     const departureInput = document.getElementById("departure-input");
     const destinationInput = document.getElementById("destination-input");
 
     if (!departureLabelText || !destinationLabelText) return;
 
     if (mode === 'flights') {
+        departureGroup?.classList.remove("hidden-group");
+        checkoutGroup?.classList.add("hidden-group");
         departureLabelText.textContent = "Departure";
         destinationLabelText.textContent = "Arrival";
         dateLabelText.textContent = "Departure date";
@@ -417,6 +448,8 @@ function updateModeUI(mode = 'trip') {
         if (departureInput) departureInput.placeholder = "From (city or airport)";
         if (destinationInput) destinationInput.placeholder = "To (city or airport)";
     } else if (mode === 'hotels') {
+        departureGroup?.classList.add("hidden-group");
+        checkoutGroup?.classList.remove("hidden-group");
         departureLabelText.textContent = "Origin (optional)";
         destinationLabelText.textContent = "Stay near";
         dateLabelText.textContent = "Check-in date";
@@ -426,6 +459,7 @@ function updateModeUI(mode = 'trip') {
         destinationHelp?.setAttribute("data-tooltip", "City or neighborhood where you want to book a hotel.");
         departureHelp?.setAttribute("data-tooltip", "Where you are traveling from (optional, for map context).");
         dateHelp?.setAttribute("data-tooltip", "Hotel check-in date.");
+        checkoutHelp?.setAttribute("data-tooltip", "Hotel check-out date.");
         adultsHelp?.setAttribute("data-tooltip", "Number of guests staying.");
         roomsHelp?.setAttribute("data-tooltip", "How many rooms you need.");
         radiusHelp?.setAttribute("data-tooltip", "Maximum distance from your chosen spot to find hotels.");
@@ -433,6 +467,8 @@ function updateModeUI(mode = 'trip') {
         if (departureInput) departureInput.placeholder = "Add your starting city (optional)";
         if (destinationInput) destinationInput.placeholder = "Where do you want to stay?";
     } else {
+        departureGroup?.classList.remove("hidden-group");
+        checkoutGroup?.classList.add("hidden-group");
         departureLabelText.textContent = "Departure";
         destinationLabelText.textContent = "Destination";
         dateLabelText.textContent = "Departure / Check-in date";

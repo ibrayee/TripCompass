@@ -80,7 +80,8 @@ body, html {
 }
 
 #top-bar input[type="number"] {
-    width: 100%;
+    width: 78px;
+    text-align: center;
 }
 
 #search-btn {

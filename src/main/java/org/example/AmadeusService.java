@@ -178,14 +178,16 @@ public class AmadeusService {
         return gson.toJson(response);
     }
 
-    public String getHotelOffers(String hotelIds, int adults, String checkInDate, int roomQuantity) throws ResponseException, TimeoutException {
+    public String getHotelOffers(String hotelIds, int adults, String checkInDate, int roomQuantity, String checkOutDate) throws ResponseException, TimeoutException {
+        Params params = Params.with("hotelIds", hotelIds)
+                .and("adults", adults)
+                .and("checkInDate", checkInDate)
+                .and("roomQuantity", roomQuantity);
+        if (checkOutDate != null && !checkOutDate.isBlank()) {
+            params.and("checkOutDate", checkOutDate);
+        }
         var response = executeWithRetry("Hotel offers", () ->
-                amadeus.shopping.hotelOffersSearch.get(
-                        Params.with("hotelIds", hotelIds)
-                                .and("adults", adults)
-                                .and("checkInDate", checkInDate)
-                                .and("roomQuantity", roomQuantity)
-                ));
+                amadeus.shopping.hotelOffersSearch.get(params));
         return gson.toJson(response);
     }
 

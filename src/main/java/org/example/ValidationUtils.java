@@ -38,4 +38,17 @@ public class ValidationUtils {
             return false;
         }
     }
+
+    public static boolean isValidDateRange(String checkIn, String checkOut) {
+        if (checkIn == null || checkOut == null) {
+            return false;
+        }
+        try {
+            LocalDate in = LocalDate.parse(checkIn);
+            LocalDate out = LocalDate.parse(checkOut);
+            return out.isAfter(in) && in.isAfter(LocalDate.now());
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
 }
