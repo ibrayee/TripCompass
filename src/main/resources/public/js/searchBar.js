@@ -5,10 +5,9 @@ const destinationSuggestionsEl = document.getElementById("destination-suggestion
 let suggestionController = null;
 
 function positionSuggestions(inputEl, listEl) {
-    const rect = inputEl.getBoundingClientRect();
-    listEl.style.left = `${rect.left}px`;
-    listEl.style.top = `${rect.bottom + window.scrollY}px`;
-    listEl.style.width = `${rect.width}px`;
+    listEl.style.left = "0px";
+    listEl.style.top = "100%";
+    listEl.style.width = "100%";
 }
 
 function fetchLocations(query, targetEl, onSelect) {

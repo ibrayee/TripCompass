@@ -3,25 +3,27 @@ body, html {
     margin: 0;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
+:root {
+    --header-height: 120px;
+}
 
 #top-bar {
-    position: fixed;
+    position: sticky;
     top: 0;
     left: 0;
     right: 0;
-    height: 60px;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     background: rgba(255, 255, 255, 0.95);
-    padding: 0.5rem;
+    padding: 0.75rem 1rem 0.25rem 1rem;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     z-index: 1000;
 }
 #mode-buttons {
     display: inline-block;
-    margin-right: 10px;
 }
 
 .mode-btn {
@@ -38,25 +40,98 @@ body, html {
     color: #fff;
 }
 
+.mode-wrapper {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 140px;
+    gap: 0.35rem;
+    position: relative;
+}
+
+.field-group.wide {
+    min-width: 200px;
+    flex: 1 1 240px;
+}
+
+.field-group.compact {
+    width: 140px;
+}
+
+.field-label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    color: #333;
+}
+
 #top-bar input,
+#top-bar select,
 #top-bar button {
-    padding: 0.4rem 0.6rem;
-    border-radius: 4px;
+    padding: 0.55rem 0.7rem;
+    border-radius: 6px;
     border: 1px solid #ccc;
-}#top-bar input[type="number"] {
-     width: 70px;
- }
+    font-size: 0.95rem;
+}
+
+#top-bar input[type="number"] {
+    width: 100%;
+}
+
 #search-btn {
     background-color: #4285F4;
     color: #fff;
     border: none;
     cursor: pointer;
+    min-width: 110px;
+}
+
+.help-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #e8f0fe;
+    color: #174ea6;
+    font-size: 0.75rem;
+    cursor: help;
+    position: relative;
+    border: 1px solid #b6c5f7;
+}
+
+.help-badge::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translate(-50%, 100%);
+    background: #1f2937;
+    color: #fff;
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 1002;
+}
+
+.help-badge.show-tooltip::after {
+    opacity: 1;
 }
 
 #app {
     display: flex;
-    height: calc(100% - 60px);
-    margin-top: 60px;
+    min-height: calc(100vh - var(--header-height));
 }
 
 #map {
@@ -66,7 +141,7 @@ body, html {
 
 #status-banner {
     position: fixed;
-    top: 60px;
+    top: var(--header-height);
     left: 0;
     right: 0;
     padding: 0.5rem 1rem;
@@ -89,7 +164,7 @@ body, html {
 #sidebar {
     width: 350px;
     max-width: 35%;
-    height: calc(100% - 60px);
+    height: calc(100vh - var(--header-height));
     background: #f5f5f5;
     padding: 1em;
     box-shadow: -2px 0 5px rgba(0,0,0,0.1);
@@ -98,6 +173,10 @@ body, html {
 
 .hidden {
     display: none;
+}
+
+.hidden-group {
+    display: none !important;
 }
 
 .section-title {
@@ -115,7 +194,9 @@ body, html {
 
 .suggestions {
     position: absolute;
-
+    top: 100%;
+    left: 0;
+    right: 0;
     list-style: none;
     margin: 0;
     padding: 0;

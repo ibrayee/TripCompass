@@ -2,6 +2,7 @@ let map, marker;
 let currentMode = 'trip';
 let infoWindow;
 let airportMarkers = [];
+let routePolyline = null;
 
 function setMode(mode) {
     currentMode = mode;
@@ -10,12 +11,19 @@ function setMode(mode) {
     if (activeBtn) {
         activeBtn.classList.add('active');
     }
+    updateModeUI(mode);
 }
 
 document.getElementById('mode-flights')?.addEventListener('click', () => setMode('flights'));
 document.getElementById('mode-hotels')?.addEventListener('click', () => setMode('hotels'));
 document.getElementById('mode-trip')?.addEventListener('click', () => setMode('trip'));
 
+document.addEventListener('DOMContentLoaded', () => {
+    updateModeUI(currentMode);
+    attachTooltipDelays();
+    syncAppHeightWithHeader();
+    window.addEventListener('resize', syncAppHeightWithHeader);
+});
 /* Called by Google Maps API */
 function initMap() {
     const defaultLocation = { lat: 41.9028, lng: 12.4964 }; // Rome
@@ -110,6 +118,29 @@ function placeDestinationMarker(lat, lng) {
         });
     }
 }
+function clearRouteLine() {
+    if (routePolyline) {
+        routePolyline.setMap(null);
+        routePolyline = null;
+    }
+}
+
+function drawRouteLine(originCoords, destinationCoords) {
+    if (!map || !originCoords || !destinationCoords) return;
+    clearRouteLine();
+    routePolyline = new google.maps.Polyline({
+        path: [
+            { lat: originCoords.lat, lng: originCoords.lng },
+            { lat: destinationCoords.lat, lng: destinationCoords.lng }
+        ],
+        geodesic: true,
+        strokeColor: '#4285F4',
+        strokeOpacity: 0.85,
+        strokeWeight: 4
+    });
+    routePolyline.setMap(map);
+}
+
 
 function requestTripInfo(destLat, destLng) {
     const departureInput = document.getElementById("departure-input");
@@ -148,6 +179,7 @@ function requestTripInfo(destLat, destLng) {
         appState.destinationCoords = { lat: destLat, lng: destLng };
 
         placeDestinationMarker(destLat, destLng);
+        drawRouteLine(appState.userCoords, appState.destinationCoords);
         airportMarkers.forEach(m => m.setMap(null));
         airportMarkers = [];
 
@@ -312,4 +344,138 @@ function requestTripInfo(destLat, destLng) {
             });
         appState.inflight.set(cacheKey, tripPromise);
     }
+}
+
+function configureRadiusOptions(mode) {
+    const radiusSelect = document.getElementById("radius-input");
+    if (!radiusSelect) return;
+    const previousValue = radiusSelect.value;
+    let options;
+
+    if (mode === 'hotels') {
+        options = [
+            { value: "1", label: "1 km" },
+            { value: "2", label: "2 km" },
+            { value: "5", label: "5 km" },
+            { value: "10", label: "10 km" }
+        ];
+    } else {
+        options = [
+            { value: "50", label: "50 km" },
+            { value: "100", label: "100 km" },
+            { value: "200", label: "200 km" }
+        ];
+    }
+
+    radiusSelect.innerHTML = "";
+    options.forEach((opt, idx) => {
+        const optionEl = document.createElement("option");
+        optionEl.value = opt.value;
+        optionEl.textContent = opt.label;
+        if (opt.value === previousValue || (!previousValue && idx === 0)) {
+            optionEl.selected = true;
+        }
+        radiusSelect.appendChild(optionEl);
+    });
+    if (!radiusSelect.value && options.length) {
+        radiusSelect.value = options[0].value;
+    }
+}
+
+function updateModeUI(mode = 'trip') {
+    const departureLabelText = document.getElementById("departure-label-text");
+    const destinationLabelText = document.getElementById("destination-label-text");
+    const dateLabelText = document.getElementById("date-label-text");
+    const adultsLabelText = document.getElementById("adults-label-text");
+    const roomsLabelText = document.getElementById("rooms-label-text");
+    const radiusLabelText = document.getElementById("radius-label-text");
+    const departureHelp = document.getElementById("departure-help");
+    const destinationHelp = document.getElementById("destination-help");
+    const dateHelp = document.getElementById("date-help");
+    const adultsHelp = document.getElementById("adults-help");
+    const roomsHelp = document.getElementById("rooms-help");
+    const radiusHelp = document.getElementById("radius-help");
+    const roomsGroup = document.getElementById("rooms-group");
+    const departureInput = document.getElementById("departure-input");
+    const destinationInput = document.getElementById("destination-input");
+
+    if (!departureLabelText || !destinationLabelText) return;
+
+    if (mode === 'flights') {
+        departureLabelText.textContent = "Departure";
+        destinationLabelText.textContent = "Arrival";
+        dateLabelText.textContent = "Departure date";
+        adultsLabelText.textContent = "Passengers";
+        radiusLabelText.textContent = "Airport search radius";
+        destinationHelp?.setAttribute("data-tooltip", "City or airport you are flying to.");
+        departureHelp?.setAttribute("data-tooltip", "City or airport you will fly from.");
+        dateHelp?.setAttribute("data-tooltip", "When you want to depart.");
+        adultsHelp?.setAttribute("data-tooltip", "How many passengers are flying.");
+        roomsHelp?.setAttribute("data-tooltip", "Rooms are not needed for flight-only search.");
+        radiusHelp?.setAttribute("data-tooltip", "Distance around each city where we look for nearby airports.");
+        if (roomsGroup) roomsGroup.classList.add("hidden-group");
+        if (departureInput) departureInput.placeholder = "From (city or airport)";
+        if (destinationInput) destinationInput.placeholder = "To (city or airport)";
+    } else if (mode === 'hotels') {
+        departureLabelText.textContent = "Origin (optional)";
+        destinationLabelText.textContent = "Stay near";
+        dateLabelText.textContent = "Check-in date";
+        adultsLabelText.textContent = "Guests";
+        roomsLabelText.textContent = "Rooms";
+        radiusLabelText.textContent = "Hotel distance from destination";
+        destinationHelp?.setAttribute("data-tooltip", "City or neighborhood where you want to book a hotel.");
+        departureHelp?.setAttribute("data-tooltip", "Where you are traveling from (optional, for map context).");
+        dateHelp?.setAttribute("data-tooltip", "Hotel check-in date.");
+        adultsHelp?.setAttribute("data-tooltip", "Number of guests staying.");
+        roomsHelp?.setAttribute("data-tooltip", "How many rooms you need.");
+        radiusHelp?.setAttribute("data-tooltip", "Maximum distance from your chosen spot to find hotels.");
+        if (roomsGroup) roomsGroup.classList.remove("hidden-group");
+        if (departureInput) departureInput.placeholder = "Add your starting city (optional)";
+        if (destinationInput) destinationInput.placeholder = "Where do you want to stay?";
+    } else {
+        departureLabelText.textContent = "Departure";
+        destinationLabelText.textContent = "Destination";
+        dateLabelText.textContent = "Departure / Check-in date";
+        adultsLabelText.textContent = "Travelers";
+        roomsLabelText.textContent = "Rooms";
+        radiusLabelText.textContent = "Search radius";
+        destinationHelp?.setAttribute("data-tooltip", "City or airport for your combined trip.");
+        departureHelp?.setAttribute("data-tooltip", "City or airport you start from.");
+        dateHelp?.setAttribute("data-tooltip", "Date you leave and check in.");
+        adultsHelp?.setAttribute("data-tooltip", "How many people are traveling.");
+        roomsHelp?.setAttribute("data-tooltip", "Rooms needed for the stay.");
+        radiusHelp?.setAttribute("data-tooltip", "Distance we use to find nearby airports and hotels.");
+        if (roomsGroup) roomsGroup.classList.remove("hidden-group");
+        if (departureInput) departureInput.placeholder = "From (city or airport)";
+        if (destinationInput) destinationInput.placeholder = "Destination city or area";
+    }
+
+    configureRadiusOptions(mode);
+    syncAppHeightWithHeader();
+}
+
+function attachTooltipDelays() {
+    document.querySelectorAll(".help-badge").forEach(el => {
+        let timer;
+        const show = () => {
+            timer = setTimeout(() => el.classList.add("show-tooltip"), 800);
+        };
+        const hide = () => {
+            clearTimeout(timer);
+            el.classList.remove("show-tooltip");
+        };
+        el.addEventListener("mouseenter", show);
+        el.addEventListener("focus", show);
+        el.addEventListener("mouseleave", hide);
+        el.addEventListener("blur", hide);
+    });
+}
+
+function syncAppHeightWithHeader() {
+    const header = document.getElementById("top-bar");
+    const app = document.getElementById("app");
+    if (!header || !app) return;
+    const headerHeight = Math.ceil(header.getBoundingClientRect().height);
+    document.documentElement.style.setProperty("--header-height", `${headerHeight}px`);
+    app.style.minHeight = `calc(100vh - ${headerHeight}px)`;
 }

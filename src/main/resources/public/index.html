@@ -10,35 +10,84 @@
 <body>
 
 <header id="top-bar">
-    <div id="mode-buttons">
-        <button id="mode-flights" class="mode-btn" title="Flights">✈️</button>
-        <button id="mode-hotels" class="mode-btn" title="Hotels">🛏️</button>
-        <button id="mode-trip" class="mode-btn active" title="Flights + Hotels">✈️🛏️</button>
+    <div id="mode-buttons" class="field-group">
+        <div class="field-label">Search type</div>
+        <div class="mode-wrapper">
+            <button id="mode-flights" class="mode-btn" title="Flights" aria-label="Flights mode">✈️</button>
+            <button id="mode-hotels" class="mode-btn" title="Hotels" aria-label="Hotels mode">🛏️</button>
+            <button id="mode-trip" class="mode-btn active" title="Flights + Hotels" aria-label="Flights plus Hotels mode">✈️🛏️</button>
+        </div>
     </div>
-    <input type="text" id="departure-input" placeholder="Enter departure..." />
-    <ul id="departure-suggestions" class="suggestions"></ul>
-    <input type="text" id="destination-input" placeholder="Enter destination..." />
-    <ul id="destination-suggestions" class="suggestions"></ul>
-    <input type="date" id="checkin-input" />
-    <input type="number" id="adults-input" min="1" value="1" aria-label="Adults" />
-    <input type="number" id="rooms-input" min="1" value="1" aria-label="Rooms" />
-    <select id="radius-input">
-        <option value="50">50 km</option>
-        <option value="100">100 km</option>
-        <option value="200" selected>200 km</option>
-    </select>
-    <button id="search-btn" onclick="searchCity()">Search</button>
+
+    <div class="field-group wide">
+        <label id="departure-label" class="field-label" for="departure-input">
+            <span id="departure-label-text">Departure</span>
+            <span id="departure-help" class="help-badge" tabindex="0" data-tooltip="City or airport you will leave from.">?</span>
+        </label>
+        <input type="text" id="departure-input" placeholder="Enter departure..." autocomplete="off" />
+        <ul id="departure-suggestions" class="suggestions"></ul>
+    </div>
+
+    <div class="field-group wide">
+        <label id="destination-label" class="field-label" for="destination-input">
+            <span id="destination-label-text">Destination</span>
+            <span id="destination-help" class="help-badge" tabindex="0" data-tooltip="City, airport, or area you want to reach.">?</span>
+        </label>
+        <input type="text" id="destination-input" placeholder="Enter destination..." autocomplete="off" />
+        <ul id="destination-suggestions" class="suggestions"></ul>
+    </div>
+
+    <div class="field-group">
+        <label id="date-label" class="field-label" for="checkin-input">
+            <span id="date-label-text">Travel date</span>
+            <span id="date-help" class="help-badge" tabindex="0" data-tooltip="Pick the departure or check-in date for your trip.">?</span>
+        </label>
+        <input type="date" id="checkin-input" />
+    </div>
+
+    <div class="field-group compact">
+        <label id="adults-label" class="field-label" for="adults-input">
+            <span id="adults-label-text">Adults</span>
+            <span id="adults-help" class="help-badge" tabindex="0" data-tooltip="How many adults are traveling or staying.">?</span>
+        </label>
+        <input type="number" id="adults-input" min="1" value="1" aria-label="Adults" />
+    </div>
+
+    <div class="field-group compact" id="rooms-group">
+        <label id="rooms-label" class="field-label" for="rooms-input">
+            <span id="rooms-label-text">Rooms</span>
+            <span id="rooms-help" class="help-badge" tabindex="0" data-tooltip="How many rooms you need for hotels.">?</span>
+        </label>
+        <input type="number" id="rooms-input" min="1" value="1" aria-label="Rooms" />
+    </div>
+
+    <div class="field-group compact">
+        <label id="radius-label" class="field-label" for="radius-input">
+            <span id="radius-label-text">Search radius</span>
+            <span id="radius-help" class="help-badge" tabindex="0" data-tooltip="Maximum distance around your location where we search airports or hotels.">?</span>
+        </label>
+        <select id="radius-input">
+            <option value="50">50 km</option>
+            <option value="100">100 km</option>
+            <option value="200" selected>200 km</option>
+        </select>
+    </div>
+
+    <div class="field-group">
+        <label class="field-label" for="search-btn">&nbsp;</label>
+        <button id="search-btn" onclick="searchCity()">Search</button>
+    </div>
 </header>
 <div id="status-banner" class="status-banner"></div>
 <main id="app">
 
     <div id="map"></div>
 
-       <!-- Sidebar nascosta di default -->
-        <aside id="sidebar" class="hidden">
-            <div id="results"></div>
-        </aside>
-    </main>
+    <!-- Sidebar nascosta di default -->
+    <aside id="sidebar" class="hidden">
+        <div id="results"></div>
+    </aside>
+</main>
 
 <!-- Script -->
 <script src="js/searchBar.js"></script>
