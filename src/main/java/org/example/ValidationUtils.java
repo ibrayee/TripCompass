@@ -8,6 +8,8 @@ import java.time.format.DateTimeParseException;
 
 public class ValidationUtils {
     private static final Logger logger = LoggerFactory.getLogger(ValidationUtils.class);
+
+    // Check if the coordinates are valid numbers
     public static boolean isValidCoordinates(String lat, String lng) {
         try {
             double latitude = Double.parseDouble(lat);
@@ -17,7 +19,7 @@ public class ValidationUtils {
             return false;
         }
     }
-
+    // Check if the date is in the future
     public static boolean isFutureDate(String dateStr) {
         if (dateStr == null) {
             logger.warn("Date string is null");
@@ -31,6 +33,7 @@ public class ValidationUtils {
         }
     }
 
+    // Check if the string is a positive number
     public static boolean isPositiveInteger(String numberStr) {
         try {
             return Integer.parseInt(numberStr) > 0;
@@ -39,6 +42,7 @@ public class ValidationUtils {
         }
     }
 
+    // Check if checkin and checkout dates are correct
     public static boolean isValidDateRange(String checkIn, String checkOut) {
         if (checkIn == null || checkOut == null) {
             return false;

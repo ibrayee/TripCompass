@@ -56,6 +56,7 @@ public class HotelSearchService {
         return fetched;
     }
 
+    // Call api to find hotels
     private List<HotelSummary> fetchHotels(HotelQuery query) throws IOException {
         String accessToken = ensureToken();
         HttpUrl.Builder urlBuilder = Objects.requireNonNull(HttpUrl.parse(HOTEL_SEARCH_URL)).newBuilder()
@@ -133,6 +134,7 @@ public class HotelSearchService {
         }
     }
 
+    // Check if token is expired
     private synchronized String ensureToken() throws IOException {
         if (tokenCache != null && !tokenCache.isExpired()) {
             return tokenCache.accessToken();
@@ -168,6 +170,7 @@ public class HotelSearchService {
         }
     }
 
+    // Create link for google maps
     private String googleMapsLink(double lat, double lng, String name) {
         String query = name == null || name.isBlank()
                 ? lat + "," + lng

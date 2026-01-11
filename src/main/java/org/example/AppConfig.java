@@ -13,6 +13,7 @@ public class AppConfig {
     private final int maxHotelResults;
     private final double searchRadiusKm;
 
+    // Load vars from .env file
     public AppConfig(Dotenv dotenv) {
         this.amadeusApiKey = dotenv.get("AMADEUS_API_KEY", "");
         this.amadeusApiSecret = dotenv.get("AMADEUS_API_SECRET", "");
@@ -28,6 +29,7 @@ public class AppConfig {
                 : Optional.of(googleMapsApiKey);
     }
 
+    // Check if amadeus keys are present
     public boolean hasAmadeusCredentials() {
         return amadeusApiKey != null && !amadeusApiKey.isBlank()
                 && amadeusApiSecret != null && !amadeusApiSecret.isBlank();

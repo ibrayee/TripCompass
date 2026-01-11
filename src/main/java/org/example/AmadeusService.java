@@ -21,10 +21,12 @@ public class AmadeusService {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
     private static final int MAX_RETRIES = 2;
 
+    // Initialize the amadeus api
     public AmadeusService(String apiKey, String apiSecret) {
         this.amadeus = Amadeus.builder(apiKey, apiSecret).build();
     }
 
+    // Try to execute the action, if fail retry
     private <T> T executeWithRetry(String operation, Callable<T> action) throws ResponseException, TimeoutException {
         int attempt = 0;
         long delayMillis = 300;
@@ -58,6 +60,7 @@ public class AmadeusService {
         }
     }
 
+    // Run the task with a timeout
     private <T> T runWithTimeout(Callable<T> task, Duration timeout) throws TimeoutException, ResponseException {
         Future<T> future = executor.submit(task);
         try {
@@ -80,6 +83,7 @@ public class AmadeusService {
         }
     }
 
+    // Get the nearest airport from coordinates
     public String getNearestAirport(double lat, double lng) throws ResponseException, TimeoutException {
         String latStr = String.format(Locale.US, "%.6f", lat);
         String lngStr = String.format(Locale.US, "%.6f", lng);
@@ -100,7 +104,7 @@ public class AmadeusService {
         }
     }
 
-
+    // Get list of airports nearby
     public List<String> getNearbyAirports(double lat, double lng, int radiusKm, int limit) throws ResponseException, TimeoutException {
         List<String> airportCodes = new ArrayList<>();
         String latStr = String.format(Locale.US, "%.6f", lat);
@@ -123,6 +127,7 @@ public class AmadeusService {
         return airportCodes;
     }
 
+    // Get details of nearby airports
     public List<Map<String, Object>> getNearbyAirportDetails(double lat, double lng, int radiusKm, int limit) throws ResponseException, TimeoutException {
         List<Map<String, Object>> airports = new ArrayList<>();
         String latStr = String.format(Locale.US, "%.6f", lat);
@@ -152,6 +157,7 @@ public class AmadeusService {
         return airports;
     }
 
+    //Search for flight offers
     public String getFlightOffers(String origin, String destination, String departureDate, String returnDate, int adults) throws ResponseException, TimeoutException {
         Params params = Params.with("originLocationCode", origin)
                 .and("destinationLocationCode", destination)
@@ -165,6 +171,7 @@ public class AmadeusService {
         return gson.toJson(response);
     }
 
+    //Find hotels by position
     public String getHotelsByGeocode(double lat, double lng, int radiusKm) throws ResponseException, TimeoutException {
         var response = executeWithRetry("Hotels by geocode", () ->
                 amadeus.referenceData.locations.hotels.byGeocode.get(
@@ -176,6 +183,7 @@ public class AmadeusService {
         return gson.toJson(response);
     }
 
+    // Get specific offers for a hotel
     public String getHotelOffers(String hotelIds, int adults, String checkInDate, int roomQuantity, String checkOutDate) throws ResponseException, TimeoutException {
         Params params = Params.with("hotelIds", hotelIds)
                 .and("adults", adults)
@@ -189,6 +197,7 @@ public class AmadeusService {
         return gson.toJson(response);
     }
 
+    // Get lat and long from city name
     public double[] geocodeCityToCoords(String cityName) {
         try {
             Params params = Params.with("keyword", cityName)
@@ -211,6 +220,7 @@ public class AmadeusService {
         return null;
     }
 
+    // Search for locations by keyword
     public List<Map<String, Object>> searchLocations(String keyword) throws ResponseException, TimeoutException {
         List<Map<String, Object>> suggestions = new ArrayList<>();
         Params params = Params.with("keyword", keyword)
@@ -237,7 +247,7 @@ public class AmadeusService {
         return suggestions;
     }
 
-
+    // Find nearest airport with increasing radius
     public String findNearestAirportCode(double lat, double lng) {
         return findNearestAirportCode(lat, lng, 200);
     }

@@ -35,6 +35,7 @@ public class TripController {
 
     private static final Logger logger = LoggerFactory.getLogger(TripController.class);
 
+    // Check if amadeus is enabled
     private static final boolean AMADEUS_ENABLED = AMADEUS_API_KEY != null && !AMADEUS_API_KEY.isBlank()
             && AMADEUS_API_SECRET != null && !AMADEUS_API_SECRET.isBlank();
 
@@ -122,6 +123,7 @@ public class TripController {
         boolean hasOrigin = origin != null && !origin.isEmpty();
         boolean hasCheckout = checkOutDate != null && !checkOutDate.isBlank();
 
+        // Validate the input
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)
                 || !ValidationUtils.isFutureDate(checkInDate)
                 || !ValidationUtils.isPositiveInteger(adultsStr)
@@ -135,6 +137,7 @@ public class TripController {
         }
 
         try {
+            // Parse numbers
             double lat = Double.parseDouble(latStr.trim().replace(",", "."));
             double lng = Double.parseDouble(lngStr.trim().replace(",", "."));
             int adults = Integer.parseInt(adultsStr.trim());
@@ -365,6 +368,7 @@ public class TripController {
 
         logger.debug("Nearby search lat={}, lng={}, checkInDate={}, adults={}, roomQuantity={}", latStr, lngStr, checkInDate, adultsStr, roomQuantityStr);
 
+        // Check if params are correct
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
             ctx.status(400).result("Invalid parameters: coordinates are not valid.");
             return;
@@ -428,6 +432,7 @@ public class TripController {
         }
     }
 
+    // Old way to search hotels if the fast one fails
     private static List<Map<String, Object>> normalizeHotelSummaries(List<HotelSummary> summaries) {
         List<Map<String, Object>> results = new ArrayList<>();
         for (HotelSummary summary : summaries) {

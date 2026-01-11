@@ -45,6 +45,7 @@ public class TripInfoService {
         double[] originCoords = amadeusService.geocodeCityToCoords(originCity);
         if (originCoords == null) throw new IllegalArgumentException("Could not geolocate origin city");
 
+        // Get nearest airport for origin
         String originAirport = amadeusService.getNearestAirport(originCoords[0], originCoords[1]);
         if (originAirport == null) throw new IllegalStateException("No origin airport found");
 
@@ -66,6 +67,7 @@ public class TripInfoService {
             int rooms
     ) throws ResponseException, TimeoutException {
         double[] originCoords = new double[]{originLat, originLng};
+        // If we dont have origin airport, find it
         if (originAirport == null || originAirport.isBlank()) {
             originAirport = amadeusService.getNearestAirport(originLat, originLng);
             if (originAirport == null) throw new IllegalStateException("No origin airport found");
@@ -86,9 +88,12 @@ public class TripInfoService {
         // keep the happy path short and log the key context
         logger.info("Starting trip-info for destination ({}, {}) from {} at {}", lat, lng, originAirport, checkInDate);
         logger.debug("Looking up nearest airport for destination");
+
+        // Find destination airport
         String destinationAirport = amadeusService.getNearestAirport(lat, lng);
         if (destinationAirport == null) {
             logger.warn("No main destination airport found. Trying nearby airports...");
+            // Try to find other airports nearby
             List<String> nearby = amadeusService.getNearbyAirports(lat, lng, 200, 3);
             if (!nearby.isEmpty()) {
                 destinationAirport = nearby.get(0);
@@ -109,6 +114,7 @@ public class TripInfoService {
                 .parseString(amadeusService.getFlightOffers(originAirport, destinationAirport, checkInDate, null, adults))
                 .getAsJsonArray();
 
+        // If no flights found, try fallback airports
         if (flightArray.size() == 0) {
             // simple fallback so user still gets something
             logger.warn("No direct flights found, trying fallback airports...");
