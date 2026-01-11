@@ -7,9 +7,8 @@ const destinationSuggestionsEl = document.getElementById("destination-suggestion
 // abort controller is used to cancel old requests while user is typing
 let suggestionController = null;
 
-function positionSuggestions(inputEl, listEl) {
+function positionSuggestions(listEl) {
     // simple positioning: put suggestion list below input and full width
-    // (inputEl is not used here but maybe you keep it for future)
     listEl.style.left = "0px";
     listEl.style.top = "100%";
     listEl.style.width = "100%";
@@ -83,8 +82,7 @@ departureInput.addEventListener("input", () => {
 
     // start searching even with 1 character
     if (query.length >= 1) {
-        positionSuggestions(departureInput, departureSuggestionsEl);
-
+        positionSuggestions(departureSuggestionsEl);
         fetchLocations(query, departureSuggestionsEl, (loc) => {
             // clear suggestions after selecting
             departureSuggestionsEl.innerHTML = "";
@@ -111,13 +109,9 @@ destinationInput.addEventListener("input", () => {
     const query = destinationInput.value.trim();
 
     if (query.length >= 1) {
-        positionSuggestions(destinationInput, destinationSuggestionsEl);
-
+        positionSuggestions(destinationSuggestionsEl);
         fetchLocations(query, destinationSuggestionsEl, (loc) => {
             // reminder: when selecting suggestion, we clear list
-            destinationSuggestionsEl.innerHTML = "";
-
-
             destinationSuggestionsEl.innerHTML = "";
 
             destinationInput.value = loc.name;

@@ -1,7 +1,6 @@
 // global variables for the map and UI state
 let map, marker;
 let currentMode = 'trip'; // can be: 'trip' | 'flights' | 'hotels'
-let infoWindow;
 let airportMarkers = [];  // markers for nearby airports
 let routePolyline = null; // line between origin and destination (simple straight line)
 let cachedCheckinMin = null; // remember minimum check-in date
@@ -55,9 +54,6 @@ function initMap() {
         zoom: 6,
         mapId: "bf198408fe296ef1" // custom map style id from google cloud console
     });
-
-    // one global InfoWindow (but later you also create per-hotel infoWindow)
-    infoWindow = new google.maps.InfoWindow();
 
     // date inputs handling (check-in / check-out)
     const checkinInput = document.getElementById("checkin-input");
