@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
 let allHotelData = [];
 let offset = 0;
 let limit = 5;
+let skippedHotelCount = 0;
+const invalidNoticeId = 'hotel-invalid-notice';
 function plotHotelsOnMap(hotels) {
     if (!Array.isArray(hotels) || typeof google === 'undefined' || !map) return;
     const bounds = new google.maps.LatLngBounds();
@@ -66,7 +68,7 @@ async function fetchHotels() {
     try {
         showLoading?.();
 
-        // 1) Chiave Maps
+        // 1) key Maps
         const keyRes = await fetch('/config/maps-key');
         if (!keyRes.ok) throw new Error('Failed to load Maps API key');
         ({ apiKey } = await keyRes.json());
@@ -87,7 +89,7 @@ async function fetchHotels() {
 
         if (resultsDiv) resultsDiv.innerHTML = '';
 
-        // Controllo struttura risultati
+        // controll structure results
         if (!data?.offers || !Array.isArray(data.offers) || data.offers.length === 0) {
             if (resultsDiv) {
                 resultsDiv.innerHTML = `
@@ -100,9 +102,10 @@ async function fetchHotels() {
             return;
         }
 
-        // Salva e renderizza
-        allHotelData.push(...data.offers);
-        renderNextHotels();
+        // save and renderise
+        const { validOffers, skippedCount } = splitValidHotels(data.offers);
+        skippedHotelCount = skippedCount;
+        allHotelData.push(...validOffers);
 
         // Mappa
         plotHotelsOnMap(allHotelData.slice(0, limit));
@@ -172,4 +175,42 @@ function renderNextHotels() {
         if (btn) btn.style.display = 'none';
     }
 
+    if (offset >= allHotelData.length) {
+        appendInvalidNotice(container);
+    }
+}
+
+function splitValidHotels(offers) {
+    const validOffers = [];
+    let skippedCount = 0;
+    if (!Array.isArray(offers)) {
+        return { validOffers, skippedCount: offers ? 1 : 0 };
+    }
+
+    offers.forEach(offer => {
+        const hotelData = offer?.offers?.[0];
+        const hotel = hotelData?.hotel;
+        const price = hotelData?.offers?.[0]?.price;
+        if (hotel?.name && price?.total && price?.currency) {
+            validOffers.push(offer);
+        } else {
+            skippedCount += 1;
+        }
+    });
+
+    return { validOffers, skippedCount };
+}
+
+function appendInvalidNotice(container) {
+    if (!container || skippedHotelCount === 0) return;
+    if (document.getElementById(invalidNoticeId)) return;
+
+    const notice = document.createElement('div');
+    notice.id = invalidNoticeId;
+    notice.className = 'info-message';
+    notice.innerHTML = `
+        <h3>Some hotels were skipped</h3>
+        <p>${skippedHotelCount} results were omitted because no rooms were available or data was invalid.</p>
+    `;
+    container.appendChild(notice);
 }
