@@ -3,10 +3,14 @@ package org.example;
 import com.amadeus.exceptions.ResponseException;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Service to orchestrate the trip-info business logic:
@@ -16,10 +20,13 @@ import java.util.*;
  * - assemble final response map
  */
 public class TripInfoService {
+    private static final Logger logger = LoggerFactory.getLogger(TripInfoService.class);
     private final AmadeusService amadeusService;
+    private final HotelSearchService hotelSearchService;
 
-    public TripInfoService(AmadeusService amadeusService) {
+    public TripInfoService(AmadeusService amadeusService, HotelSearchService hotelSearchService) {
         this.amadeusService = amadeusService;
+        this.hotelSearchService = hotelSearchService;
     }
 
     /**
@@ -30,28 +37,20 @@ public class TripInfoService {
             double lng,
             String originCity,
             String checkInDate,
+            String checkOutDate,
             int adults,
             int rooms
-    ) throws ResponseException {
-        return getTripInfo(lat, lng, originCity, checkInDate, adults, rooms, 10);
-    }
-
-    public Map<String, Object> getTripInfo(
-            double lat,
-            double lng,
-            String originCity,
-            String checkInDate,
-            int adults,
-            int rooms,
-            int maxFlights
-    ) throws ResponseException {
+    ) throws ResponseException, TimeoutException {
+        // quick geocode so we can jump from city text to airport
         double[] originCoords = amadeusService.geocodeCityToCoords(originCity);
         if (originCoords == null) throw new IllegalArgumentException("Could not geolocate origin city");
 
+        // Get nearest airport for origin
         String originAirport = amadeusService.getNearestAirport(originCoords[0], originCoords[1]);
         if (originAirport == null) throw new IllegalStateException("No origin airport found");
 
-        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms, maxFlights);    }
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, checkOutDate, adults, rooms);
+    }
 
     /**
      * Fetches combined trip information when origin coordinates and/or airport are already known.
@@ -63,29 +62,18 @@ public class TripInfoService {
             double originLat,
             double originLng,
             String checkInDate,
+            String checkOutDate,
             int adults,
             int rooms
-    ) throws ResponseException {
-        return getTripInfo(lat, lng, originAirport, originLat, originLng, checkInDate, adults, rooms, 10);
-    }
-
-    public Map<String, Object> getTripInfo(
-            double lat,
-            double lng,
-            String originAirport,
-            double originLat,
-            double originLng,
-            String checkInDate,
-            int adults,
-            int rooms,
-            int maxFlights
-    ) throws ResponseException {
+    ) throws ResponseException, TimeoutException {
         double[] originCoords = new double[]{originLat, originLng};
+        // If we dont have origin airport, find it
         if (originAirport == null || originAirport.isBlank()) {
             originAirport = amadeusService.getNearestAirport(originLat, originLng);
             if (originAirport == null) throw new IllegalStateException("No origin airport found");
         }
-        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, adults, rooms, maxFlights);    }
+        return getTripInfoInternal(lat, lng, originAirport, originCoords, checkInDate, checkOutDate, adults, rooms);
+    }
 
     private Map<String, Object> getTripInfoInternal(
             double lat,
@@ -93,58 +81,43 @@ public class TripInfoService {
             String originAirport,
             double[] originCoords,
             String checkInDate,
+            String checkOutDate,
             int adults,
-            int rooms,
-            int maxFlights
-    ) throws ResponseException {
-        System.out.println("STARTING TRIP INFO...");
-        System.out.println("Lat: " + lat + ", Lng: " + lng);
-        System.out.println("Origin airport: " + originAirport + ", Check-in: " + checkInDate);
-        System.out.println("→ Looking up nearest airport for destination...");
+            int rooms
+    ) throws ResponseException, TimeoutException {
+        // keep the happy path short and log the key context
+        logger.info("Starting trip-info for destination ({}, {}) from {} at {}", lat, lng, originAirport, checkInDate);
+        logger.debug("Looking up nearest airport for destination");
+
+        // Find destination airport
         String destinationAirport = amadeusService.getNearestAirport(lat, lng);
         if (destinationAirport == null) {
-            System.out.println("[WARN] No main destination airport found. Trying nearby airports...");
+            logger.warn("No main destination airport found. Trying nearby airports...");
+            // Try to find other airports nearby
             List<String> nearby = amadeusService.getNearbyAirports(lat, lng, 200, 3);
             if (!nearby.isEmpty()) {
                 destinationAirport = nearby.get(0);
-                System.out.println("→ Using fallback destination airport: " + destinationAirport);
+                logger.info("Using fallback destination airport: {}", destinationAirport);
             } else {
                 throw new IllegalStateException("No destination airport found within 200km.");
             }
         }
 
-       System.out.println("→ Origin coords: " + Arrays.toString(originCoords));
+        logger.debug("Origin coords: {}", Arrays.toString(originCoords));
 
 
         // 3. Search hotel offers (limit to top 3)
-        List<Map<String, Object>> hotelOffers = new ArrayList<>();
-        JsonArray hotelArray = JsonParser
-                .parseString(amadeusService.getHotelsByGeocode(lat, lng, 10))
-                .getAsJsonArray();
-        for (var element : hotelArray) {
-            JsonObject hotelObj = element.getAsJsonObject();
-            if (!hotelObj.has("hotelId")) continue;
-            String hotelId = hotelObj.get("hotelId").getAsString();
-            try {
-                String offersJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms);
-                Object offers = new Gson().fromJson(offersJson, Object.class);
-                Map<String, Object> hotelData = new HashMap<>();
-                hotelData.put("hotelId", hotelId);
-                hotelData.put("offers", offers);
-                hotelOffers.add(hotelData);
-                if (hotelOffers.size() >= 3) break;
-            } catch (ResponseException e) {
-                // skip unavailable hotels
-            }
-        }
+        List<Map<String, Object>> hotelOffers = fetchHotelSummaries(lat, lng, checkInDate, checkOutDate, adults, rooms);
 
         // 4. Search flight offers (with fallback)
         JsonArray flightArray = JsonParser
                 .parseString(amadeusService.getFlightOffers(originAirport, destinationAirport, checkInDate, null, adults))
                 .getAsJsonArray();
 
+        // If no flights found, try fallback airports
         if (flightArray.size() == 0) {
-            System.out.println("[WARN] No direct flights found, trying fallback airports...");
+            // simple fallback so user still gets something
+            logger.warn("No direct flights found, trying fallback airports...");
             List<String> altOrigins = amadeusService.getNearbyAirports(originCoords[0], originCoords[1], 100, 3);
             List<String> altDests = amadeusService.getNearbyAirports(lat, lng, 100, 3);
             outer:
@@ -159,7 +132,7 @@ public class TripInfoService {
                             flightArray = altArray;
                             originAirport = altOrig;
                             destinationAirport = altDest;
-                            System.out.println("→ Fallback flight found: " + altOrig + " → " + altDest);
+                            logger.info("Fallback flight found: {} -> {}", altOrig, altDest);
                             break outer;
                         }
                     } catch (ResponseException ignored) {}
@@ -171,16 +144,21 @@ public class TripInfoService {
         // 5. Simplify flight offers (limit to top 3)
         JsonArray simplifiedFlights = new JsonArray();
         Set<String> seenFlights = new HashSet<>();
-        Set<String> carrierCodes = new HashSet<>();
-
-        for (var offerElement : flightArray) {
+        for (JsonElement offerElement : flightArray) {
+            if (!offerElement.isJsonObject()) continue;
             JsonObject offer = offerElement.getAsJsonObject();
-            JsonObject itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
-            var segments = itinerary.getAsJsonArray("segments");
+            JsonArray itineraries = offer.has("itineraries") ? offer.getAsJsonArray("itineraries") : null;
+            if (itineraries == null || itineraries.size() == 0) continue;
+            JsonObject itinerary = itineraries.get(0).getAsJsonObject();
+            JsonArray segments = itinerary.getAsJsonArray("segments");
+            if (segments == null || segments.size() == 0) continue;
             JsonObject firstSegment = segments.get(0).getAsJsonObject();
             JsonObject lastSegment = segments.get(segments.size() - 1).getAsJsonObject();
             JsonObject dep = firstSegment.getAsJsonObject("departure");
             JsonObject arr = lastSegment.getAsJsonObject("arrival");
+            if (dep == null || arr == null || !dep.has("iataCode") || !arr.has("iataCode") || !dep.has("at") || !arr.has("at")) {
+                continue;
+            }
 
             String originCode = dep.get("iataCode").getAsString();
             String destCode = arr.get("iataCode").getAsString();
@@ -195,13 +173,17 @@ public class TripInfoService {
             simple.addProperty("destination", destCode);
             simple.addProperty("departure", depTime);
             simple.addProperty("arrival", arr.get("at").getAsString());
-            simple.addProperty("duration", itinerary.get("duration").getAsString());
-            simple.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
-            simple.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-            String topCode = firstSegment.get("carrierCode").getAsString();
-            carrierCodes.add(topCode);
-            simple.addProperty("airlineCode", topCode);
-            simple.addProperty("airline", topCode);
+            if (itinerary.has("duration")) {
+                simple.addProperty("duration", itinerary.get("duration").getAsString());
+            }
+            if (offer.has("price") && offer.get("price").isJsonObject()) {
+                JsonObject price = offer.getAsJsonObject("price");
+                if (price.has("total")) simple.addProperty("price", price.get("total").getAsString());
+                if (price.has("currency")) simple.addProperty("currency", price.get("currency").getAsString());
+            }
+            if (firstSegment.has("carrierCode")) {
+                simple.addProperty("airline", firstSegment.get("carrierCode").getAsString());
+            }
 
             JsonArray legs = new JsonArray();
             JsonArray stopovers = new JsonArray();
@@ -209,19 +191,17 @@ public class TripInfoService {
                 JsonObject seg = segments.get(i).getAsJsonObject();
                 JsonObject segDep = seg.getAsJsonObject("departure");
                 JsonObject segArr = seg.getAsJsonObject("arrival");
+                if (segDep == null || segArr == null || !segDep.has("iataCode") || !segArr.has("iataCode")) continue;
 
                 JsonObject leg = new JsonObject();
                 leg.addProperty("origin", segDep.get("iataCode").getAsString());
                 leg.addProperty("destination", segArr.get("iataCode").getAsString());
-                leg.addProperty("departure", segDep.get("at").getAsString());
-                leg.addProperty("arrival", segArr.get("at").getAsString());
-                String segCode = seg.get("carrierCode").getAsString();
-                carrierCodes.add(segCode);
-                leg.addProperty("airlineCode", segCode);
-                leg.addProperty("airline", segCode);
+                if (segDep.has("at")) leg.addProperty("departure", segDep.get("at").getAsString());
+                if (segArr.has("at")) leg.addProperty("arrival", segArr.get("at").getAsString());
+                if (seg.has("carrierCode")) leg.addProperty("airline", seg.get("carrierCode").getAsString());
                 legs.add(leg);
 
-                if (i < segments.size() - 1) {
+                if (i < segments.size() - 1 && segArr.has("iataCode")) {
                     stopovers.add(segArr.get("iataCode").getAsString());
                 }
             }
@@ -231,19 +211,8 @@ public class TripInfoService {
             }
 
             simplifiedFlights.add(simple);
-            if (simplifiedFlights.size() >= maxFlights) break;
+            if (simplifiedFlights.size() >= 3) break;
         }
-        Map<String, String> names = amadeusService.getAirlineNames(new ArrayList<>(carrierCodes));
-        for (var element : simplifiedFlights) {
-            JsonObject flight = element.getAsJsonObject();
-            String code = flight.get("airlineCode").getAsString();
-            flight.addProperty("airline", names.getOrDefault(code, code));
-            JsonArray legs = flight.getAsJsonArray("segments");
-            for (var legEl : legs) {
-                JsonObject leg = legEl.getAsJsonObject();
-                String lCode = leg.get("airlineCode").getAsString();
-                leg.addProperty("airline", names.getOrDefault(lCode, lCode));
-            }        }
         Object simplifiedFlightObject = new Gson().fromJson(simplifiedFlights, Object.class);
         // 6. Assemble response
         Map<String, Object> response = new HashMap<>();
@@ -253,5 +222,80 @@ public class TripInfoService {
         response.put("hotels", hotelOffers);
         response.put("flights", simplifiedFlightObject);
         return response;
+    }
+
+    private List<Map<String, Object>> fetchHotelSummaries(double lat, double lng, String checkInDate, String checkOutDate, int adults, int rooms) {
+        List<Map<String, Object>> hotelOffers = new ArrayList<>();
+        if (hotelSearchService != null) {
+            try {
+                List<HotelSearchService.HotelSummary> summaries = hotelSearchService.searchHotels(
+                        new HotelSearchService.HotelQuery(lat, lng, checkInDate, checkOutDate, adults, rooms, 10));
+                for (HotelSearchService.HotelSummary summary : summaries) {
+                    hotelOffers.add(toHotelPayload(summary));
+                    if (hotelOffers.size() >= 3) break;
+                }
+                if (!hotelOffers.isEmpty()) {
+                    return hotelOffers;
+                }
+            } catch (Exception e) {
+                // if the fast HTTP client fails we still try legacy flow
+                logger.warn("Fast hotel summary lookup failed, falling back: {}", e.getMessage());
+            }
+        }
+
+        try {
+            JsonArray hotelArray = JsonParser
+                    .parseString(amadeusService.getHotelsByGeocode(lat, lng, 10))
+                    .getAsJsonArray();
+            for (JsonElement element : hotelArray) {
+                if (!element.isJsonObject()) continue;
+                JsonObject hotelObj = element.getAsJsonObject();
+                if (!hotelObj.has("hotelId")) continue;
+                String hotelId = hotelObj.get("hotelId").getAsString();
+                try {
+                    String offersJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms, checkOutDate);
+                    JsonElement parsedOffers = JsonParser.parseString(offersJson);
+                    if (!parsedOffers.isJsonArray() || parsedOffers.getAsJsonArray().size() == 0) {
+                        continue;
+                    }
+                    Map<String, Object> hotelData = new HashMap<>();
+                    hotelData.put("hotelId", hotelId);
+                    hotelData.put("offers", new Gson().fromJson(parsedOffers, Object.class));
+                    hotelOffers.add(hotelData);
+                    if (hotelOffers.size() >= 3) break;
+                } catch (ResponseException e) {
+                    logger.debug("Skipping unavailable hotel {}: {}", hotelId, e.getMessage());
+                }
+            }
+        } catch (TimeoutException | ResponseException e) {
+            logger.warn("Legacy hotel lookup failed: {}", e.getMessage());
+        }
+        return hotelOffers;
+    }
+
+    private Map<String, Object> toHotelPayload(HotelSearchService.HotelSummary summary) {
+        Map<String, Object> hotelData = new HashMap<>();
+        Map<String, Object> hotelInfo = new HashMap<>();
+        hotelInfo.put("name", summary.name());
+        hotelInfo.put("latitude", summary.lat());
+        hotelInfo.put("longitude", summary.lng());
+        hotelInfo.put("address", summary.address());
+        if (summary.rating() != null && !summary.rating().isBlank()) {
+            hotelInfo.put("rating", summary.rating());
+        }
+
+        Map<String, Object> price = new HashMap<>();
+        price.put("total", summary.priceTotal());
+        price.put("currency", summary.currency());
+
+        Map<String, Object> offerContainer = new HashMap<>();
+        offerContainer.put("hotel", hotelInfo);
+        offerContainer.put("offers", List.of(Map.of("price", price)));
+        offerContainer.put("mapsLink", summary.mapsLink());
+
+        hotelData.put("hotelId", summary.id());
+        hotelData.put("offers", List.of(offerContainer));
+        hotelData.put("map", Map.of("lat", summary.lat(), "lng", summary.lng(), "link", summary.mapsLink()));
+        return hotelData;
     }
 }

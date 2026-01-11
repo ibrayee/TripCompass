@@ -3,17 +3,23 @@ package org.example;
 import com.amadeus.exceptions.ResponseException;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
+import org.example.HotelSearchService.HotelSummary;
 import io.javalin.http.Context;
 import org.slf4j.Logger;
-import org.example.GoogleMaps.MashupJavalin;
-
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.TimeoutException;
+
 
 
 /**
@@ -23,25 +29,37 @@ public class TripController {
 
     // Load environment variables for Amadeus API
     private static final Dotenv dotenv = Dotenv.configure().load();
-    private static final String AMADEUS_API_KEY = dotenv.get("AMADEUS_API_KEY");
-    private static final String AMADEUS_API_SECRET = dotenv.get("AMADEUS_API_SECRET");
-    private static final String GOOGLE_MAPS_API_KEY = dotenv.get("GOOGLE_MAPS_API_KEY");
+    private static final AppConfig config = new AppConfig(dotenv);
+    private static final String AMADEUS_API_KEY = config.amadeusApiKey();
+    private static final String AMADEUS_API_SECRET = config.amadeusApiSecret();
 
     private static final Logger logger = LoggerFactory.getLogger(TripController.class);
 
-    static {
-        if (AMADEUS_API_KEY == null || AMADEUS_API_KEY.isBlank()
-                || AMADEUS_API_SECRET == null || AMADEUS_API_SECRET.isBlank()) {
-            logger.error("Amadeus API credentials are missing. Please set AMADEUS_API_KEY and AMADEUS_API_SECRET.");
-            throw new IllegalStateException("Missing Amadeus API credentials");
-        }
-    }
+    // Check if amadeus is enabled
+    private static final boolean AMADEUS_ENABLED = AMADEUS_API_KEY != null && !AMADEUS_API_KEY.isBlank()
+            && AMADEUS_API_SECRET != null && !AMADEUS_API_SECRET.isBlank();
 
     // Service instances
-    private static final AmadeusService amadeusService = new AmadeusService(
-            AMADEUS_API_KEY, AMADEUS_API_SECRET
-    );
-    private static final TripInfoService tripInfoService = new TripInfoService(amadeusService);
+    private static final AmadeusService amadeusService = AMADEUS_ENABLED
+            ? new AmadeusService(AMADEUS_API_KEY, AMADEUS_API_SECRET)
+            : null;
+    private static final HotelSearchService hotelSearchService = AMADEUS_ENABLED
+            ? new HotelSearchService(config)
+            : null;
+    private static final TripInfoService tripInfoService = amadeusService != null
+            ? new TripInfoService(amadeusService, hotelSearchService)
+            : null;
+
+    private static boolean ensureAmadeusConfigured(Context ctx) {
+        if (!AMADEUS_ENABLED || amadeusService == null) {
+            ctx.status(503).json(Map.of(
+                    "error", "Amadeus API not configured",
+                    "message", "Set AMADEUS_API_KEY and AMADEUS_API_SECRET to enable travel search endpoints."
+            ));
+            return false;
+        }
+        return true;
+    }
 
     public static void main(String[] args) {
         // Create and configure Javalin app
@@ -54,13 +72,17 @@ public class TripController {
             config.plugins.enableCors(cors -> cors.add(it -> it.anyHost()));
         }).start(7000);
 
+        if (!AMADEUS_ENABLED) {
+            logger.warn("Amadeus API credentials are missing. Endpoints depending on Amadeus will return 503 until configured.");
+        }
+
         // Health check
         app.get("/hello", ctx -> ctx.result("Hello TripCompass!"));
         app.get("/config/maps-key", ctx -> {
-            if (GOOGLE_MAPS_API_KEY == null || GOOGLE_MAPS_API_KEY.isBlank()) {
+            if (config.googleMapsApiKey().isEmpty()) {
                 ctx.status(404).json(Map.of("error", "Google Maps API key not configured"));
             } else {
-                ctx.json(Map.of("apiKey", GOOGLE_MAPS_API_KEY));
+                ctx.json(Map.of("apiKey", config.googleMapsApiKey().orElse("")));
             }
         });
 
@@ -73,11 +95,6 @@ public class TripController {
         app.get("/trip-info", TripController::handleTripInfo);
 
         app.get("/nearby-airports", TripController::handleNearbyAirports);
-        MashupJavalin mashup = new MashupJavalin();
-        mashup.flightsAndPolyline(app);
-        mashup.hotelsAndSights(app);
-        mashup.distToHotel(app);
-        mashup.distToAirport(app);
 
     }
 
@@ -89,26 +106,29 @@ public class TripController {
      * 4) Map exceptions to HTTP codes
      */
     private static void handleTripInfo(Context ctx) {
+        if (!ensureAmadeusConfigured(ctx)) return;
         String latStr = ctx.queryParam("lat");
         String lngStr = ctx.queryParam("lng");
         String origin = ctx.queryParam("origin");
         String originLatStr = ctx.queryParam("originLat");
         String originLngStr = ctx.queryParam("originLng");
         String checkInDate = ctx.queryParam("checkInDate");
+        String checkOutDate = ctx.queryParam("checkOutDate");
         String adultsStr = ctx.queryParam("adults");
         String roomQuantityStr = ctx.queryParam("roomQuantity");
-        String maxFlightsStr = ctx.queryParam("maxFlights");
-
 
         boolean hasOriginCoords = originLatStr != null && originLngStr != null
                 && ValidationUtils.isValidCoordinates(originLatStr, originLngStr);
 
         boolean hasOrigin = origin != null && !origin.isEmpty();
+        boolean hasCheckout = checkOutDate != null && !checkOutDate.isBlank();
 
+        // Validate the input
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)
                 || !ValidationUtils.isFutureDate(checkInDate)
                 || !ValidationUtils.isPositiveInteger(adultsStr)
                 || !ValidationUtils.isPositiveInteger(roomQuantityStr)
+                || (hasCheckout && !ValidationUtils.isValidDateRange(checkInDate, checkOutDate))
                 || (!hasOrigin && !hasOriginCoords)) {
             ctx.status(400).json(Map.of(
                     "error", "Missing or invalid parameters"
@@ -117,14 +137,12 @@ public class TripController {
         }
 
         try {
+            // Parse numbers
             double lat = Double.parseDouble(latStr.trim().replace(",", "."));
             double lng = Double.parseDouble(lngStr.trim().replace(",", "."));
             int adults = Integer.parseInt(adultsStr.trim());
             int rooms = Integer.parseInt(roomQuantityStr.trim());
-            int maxFlights = 10;
-            if (maxFlightsStr != null && ValidationUtils.isPositiveInteger(maxFlightsStr)) {
-                maxFlights = Integer.parseInt(maxFlightsStr.trim());
-            }
+
             double oLat = 0;
             double oLng = 0;
             if (hasOriginCoords) {
@@ -145,16 +163,16 @@ public class TripController {
                 ));
                 return;
             }
-            System.out.println("Origin used for airport search: " + resolvedOrigin);
+            logger.info("Origin used for airport search: {}", resolvedOrigin);
 
             Map<String, Object> result;
             if (hasOriginCoords) {
                 result = tripInfoService.getTripInfo(
-                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, adults, rooms, maxFlights
+                        lat, lng, resolvedOrigin, oLat, oLng, checkInDate, checkOutDate, adults, rooms
                 );
             } else {
                 result = tripInfoService.getTripInfo(
-                        lat, lng, resolvedOrigin, checkInDate, adults, rooms, maxFlights
+                        lat, lng, resolvedOrigin, checkInDate, checkOutDate,adults, rooms
                 );
             }
 
@@ -162,10 +180,12 @@ public class TripController {
             ctx.json(result);
 
         } catch (IllegalArgumentException e) {
+            logger.warn("Trip-info validation error: {}", e.getMessage());
             ctx.status(400).json(Map.of(
                     "error", e.getMessage()
             ));
         } catch (IllegalStateException e) {
+            logger.warn("Trip-info state error: {}", e.getMessage());
             ctx.status(404).json(Map.of(
                     "error", e.getMessage()
             ));
@@ -174,7 +194,14 @@ public class TripController {
                     "error", "Upstream service error",
                     "details", e.getMessage()
             ));
+        } catch (TimeoutException e) {
+            logger.error("Trip-info timed out", e);
+            ctx.status(504).json(Map.of(
+                    "error", "Request timed out",
+                    "message", "The upstream service did not respond in time."
+            ));
         } catch (Exception e) {
+            logger.error("Unexpected error while handling trip-info", e);
             ctx.status(500).json(Map.of(
                     "error", "Internal Server Error",
                     "message", e.getMessage()
@@ -184,6 +211,7 @@ public class TripController {
     }
 
     private static void handleLocationSearch(Context ctx) {
+        if (!ensureAmadeusConfigured(ctx)) return;
         String keyword = ctx.queryParam("keyword");
         if (keyword == null || keyword.isBlank()) {
             ctx.status(400).json(Map.of("error", "Missing keyword"));
@@ -197,6 +225,11 @@ public class TripController {
                     "error", "Upstream service error",
                     "details", e.getMessage()
             ));
+        } catch (TimeoutException e) {
+            ctx.status(504).json(Map.of(
+                    "error", "Request timed out",
+                    "message", "Location search exceeded timeout"
+            ));
         } catch (Exception e) {
             ctx.status(500).json(Map.of(
                     "error", "Internal Server Error",
@@ -206,79 +239,92 @@ public class TripController {
     }
 
     private static void handleFlightSearch(Context ctx) {
+        if (!ensureAmadeusConfigured(ctx)) return;
         String origin = ctx.queryParam("origin");
         String destination = ctx.queryParam("destination");
         String departureDate = ctx.queryParam("departureDate");
         String returnDate = ctx.queryParam("returnDate");
         String adultsStr = ctx.queryParam("adults");
-        String limitStr = ctx.queryParam("limit");
 
-        if (origin == null || destination == null || departureDate == null || !ValidationUtils.isPositiveInteger(adultsStr)) {
-            logger.warn("Invalid parameters for flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
-                    origin, destination, departureDate, returnDate, adultsStr);
-            ctx.status(400).result("Invalid or missing parameters.");
-            return;
-        }
-        if (!origin.matches("[A-Z]{3}") || !destination.matches("[A-Z]{3}")) {
-            logger.warn("Invalid IATA codes for flight search origin={}, destination={}", origin, destination);
-            ctx.status(400).json(Map.of(
-                    "error", "Origin and destination must be three-letter IATA codes."
-            ));
+        if (origin == null || origin.isBlank()
+                || destination == null || destination.isBlank()
+                || departureDate == null || !ValidationUtils.isFutureDate(departureDate)
+                || !ValidationUtils.isPositiveInteger(adultsStr)) {
+            ctx.status(400).json(Map.of("error", "Invalid or missing parameters."));
             return;
         }
 
-        int adults = Integer.parseInt(adultsStr);
-        int limit = 10;
-        if (limitStr != null) {
-            try {
-                limit = Integer.parseInt(limitStr);
-            } catch (NumberFormatException ignored) {}
-        }
         try {
+            int adults = Integer.parseInt(adultsStr);
             String flightsJson = amadeusService.getFlightOffers(origin, destination, departureDate, returnDate, adults);
             JsonArray originalArray = JsonParser.parseString(flightsJson).getAsJsonArray();
 
             JsonArray simplifiedArray = new JsonArray();
-            Set<String> carrierCodes = new HashSet<>();
 
-            int count = Math.min(originalArray.size(), limit);
-            for (int idx = 0; idx < count; idx++) {
-                var offer = originalArray.get(idx).getAsJsonObject();
+            for (var offerElement : originalArray) {
+                if (!offerElement.isJsonObject()) continue;
+                JsonObject offer = offerElement.getAsJsonObject();
 
-                var itinerary = offer.getAsJsonArray("itineraries").get(0).getAsJsonObject();
-                var segments = itinerary.getAsJsonArray("segments");
-                var firstSegment = segments.get(0).getAsJsonObject();
-                var lastSegment = segments.get(segments.size() - 1).getAsJsonObject();
-                var departure = firstSegment.getAsJsonObject("departure");
-                var arrival = lastSegment.getAsJsonObject("arrival");
+                JsonArray itineraries = offer.has("itineraries") ? offer.getAsJsonArray("itineraries") : null;
+                if (itineraries == null || itineraries.size() == 0) continue;
+                JsonObject itinerary = Optional.ofNullable(itineraries.get(0))
+                        .filter(JsonElement::isJsonObject)
+                        .map(JsonElement::getAsJsonObject)
+                        .orElse(null);
+                if (itinerary == null || !itinerary.has("segments")) continue;
+
+                JsonArray segments = itinerary.getAsJsonArray("segments");
+                if (segments.size() == 0) continue;
+                JsonObject firstSegment = Optional.ofNullable(segments.get(0))
+                        .filter(JsonElement::isJsonObject)
+                        .map(JsonElement::getAsJsonObject)
+                        .orElse(null);
+                JsonObject lastSegment = Optional.ofNullable(segments.get(segments.size() - 1))
+                        .filter(JsonElement::isJsonObject)
+                        .map(JsonElement::getAsJsonObject)
+                        .orElse(null);
+                if (firstSegment == null || lastSegment == null
+                        || !firstSegment.has("departure") || !lastSegment.has("arrival")) {
+                    continue;
+                }
+                JsonObject departure = firstSegment.getAsJsonObject("departure");
+                JsonObject arrival = lastSegment.getAsJsonObject("arrival");
+                if (!departure.has("iataCode") || !arrival.has("iataCode") || !departure.has("at") || !arrival.has("at")) {
+                    continue;
+                }
                 JsonObject simplified = new JsonObject();
                 simplified.addProperty("origin", departure.get("iataCode").getAsString());
                 simplified.addProperty("destination", arrival.get("iataCode").getAsString());
                 simplified.addProperty("departure", departure.get("at").getAsString());
                 simplified.addProperty("arrival", arrival.get("at").getAsString());
-                simplified.addProperty("duration", itinerary.get("duration").getAsString());
-                simplified.addProperty("price", offer.getAsJsonObject("price").get("total").getAsString());
-                simplified.addProperty("currency", offer.getAsJsonObject("price").get("currency").getAsString());
-                String topCode = firstSegment.get("carrierCode").getAsString();
-                carrierCodes.add(topCode);
-                simplified.addProperty("airlineCode", topCode);
-                simplified.addProperty("airline", topCode);
+                simplified.addProperty("duration", itinerary.has("duration") ? itinerary.get("duration").getAsString() : "");
+                if (offer.has("price") && offer.get("price").isJsonObject()) {
+                    JsonObject price = offer.getAsJsonObject("price");
+                    if (price.has("total")) simplified.addProperty("price", price.get("total").getAsString());
+                    if (price.has("currency")) simplified.addProperty("currency", price.get("currency").getAsString());
+                }
+                if (firstSegment.has("carrierCode")) {
+                    simplified.addProperty("airline", firstSegment.get("carrierCode").getAsString());
+                }
+
                 JsonArray legs = new JsonArray();
                 JsonArray stopovers = new JsonArray();
                 for (int i = 0; i < segments.size(); i++) {
-                    var seg = segments.get(i).getAsJsonObject();
-                    var segDep = seg.getAsJsonObject("departure");
-                    var segArr = seg.getAsJsonObject("arrival");
+                    JsonObject seg = Optional.ofNullable(segments.get(i))
+                            .filter(JsonElement::isJsonObject)
+                            .map(JsonElement::getAsJsonObject)
+                            .orElse(null);
+                    if (seg == null || !seg.has("departure") || !seg.has("arrival")) continue;
+                    JsonObject segDep = seg.getAsJsonObject("departure");
+                    JsonObject segArr = seg.getAsJsonObject("arrival");
+                    if (!segDep.has("iataCode") || !segArr.has("iataCode")) continue;
 
                     JsonObject leg = new JsonObject();
                     leg.addProperty("origin", segDep.get("iataCode").getAsString());
                     leg.addProperty("destination", segArr.get("iataCode").getAsString());
-                    leg.addProperty("departure", segDep.get("at").getAsString());
-                    leg.addProperty("arrival", segArr.get("at").getAsString());
-                    String segCode = seg.get("carrierCode").getAsString();
-                    carrierCodes.add(segCode);
-                    leg.addProperty("airlineCode", segCode);
-                    leg.addProperty("airline", segCode);
+                    if (segDep.has("at")) leg.addProperty("departure", segDep.get("at").getAsString());
+                    if (segArr.has("at")) leg.addProperty("arrival", segArr.get("at").getAsString());
+                    if (seg.has("carrierCode")) leg.addProperty("airline", seg.get("carrierCode").getAsString());
                     legs.add(leg);
 
                     if (i < segments.size() - 1) {
@@ -291,51 +337,48 @@ public class TripController {
                 }
                 simplifiedArray.add(simplified);
             }
-            Map<String, String> names = amadeusService.getAirlineNames(new ArrayList<>(carrierCodes));
-            for (var element : simplifiedArray) {
-                JsonObject flight = element.getAsJsonObject();
-                String code = flight.get("airlineCode").getAsString();
-                flight.addProperty("airline", names.getOrDefault(code, code));
-                JsonArray legs = flight.getAsJsonArray("segments");
-                for (var legEl : legs) {
-                    JsonObject leg = legEl.getAsJsonObject();
-                    String lCode = leg.get("airlineCode").getAsString();
-                    leg.addProperty("airline", names.getOrDefault(lCode, lCode));
-                }
-            }
 
             ctx.contentType("application/json");
             ctx.result(new Gson().toJson(simplifiedArray));
-        } catch (ResponseException e) {
-            logger.error(
-                    "Amadeus API error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
-                    origin, destination, departureDate, returnDate, adults, e);
-            ctx.status(Integer.parseInt(e.getCode())).json(Map.of("error", e.getMessage()));
-        } catch (Exception e) {            logger.error(
-                    "Unexpected error during flight search origin={}, destination={}, departureDate={}, returnDate={}, adults={}",
-                    origin, destination, departureDate, returnDate, adults, e);
-            ctx.status(500).json(Map.of("error", "Internal Server Error"));
+
+        } catch (TimeoutException e) {
+            logger.error("Flight search timed out", e);
+            ctx.status(504).json(Map.of(
+                    "error", "Request timed out"
+            ));
+        } catch (Exception e) {
+            logger.error("Unexpected error in flight search", e);
+            ctx.status(500).json(Map.of(
+                    "error", "Internal Server Error",
+                    "message", e.getMessage()
+            ));
         }
     }
 
 
-
     private static void handleNearbySearch(Context ctx) {
+        if (!ensureAmadeusConfigured(ctx)) return;
         String latStr = ctx.queryParam("lat");
         String lngStr = ctx.queryParam("lng");
         String checkInDate = ctx.queryParam("checkInDate");
+        String checkOutDate = ctx.queryParam("checkOutDate");
         String adultsStr = ctx.queryParam("adults") != null ? ctx.queryParam("adults").trim() : null;
         String roomQuantityStr = ctx.queryParam("roomQuantity") != null ? ctx.queryParam("roomQuantity").trim() : null;
-        String radiusStr = ctx.queryParam("radius") != null ? ctx.queryParam("radius").trim() : null;
-        String limitStr = ctx.queryParam("limit") != null ? ctx.queryParam("limit").trim() : null;
-        System.out.println("[DEBUG] lat=" + latStr + ", lng=" + lngStr + ", checkInDate=" + checkInDate + ", adults=" + adultsStr
-                + ", roomQuantity=" + roomQuantityStr + ", radius=" + radiusStr + ", limit=" + limitStr);
+        String radiusStr = ctx.queryParam("radiusKm");
+
+        logger.debug("Nearby search lat={}, lng={}, checkInDate={}, adults={}, roomQuantity={}", latStr, lngStr, checkInDate, adultsStr, roomQuantityStr);
+
+        // Check if params are correct
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
             ctx.status(400).result("Invalid parameters: coordinates are not valid.");
             return;
         }
         if (!ValidationUtils.isFutureDate(checkInDate)) {
             ctx.status(400).result("Invalid parameters: check-in date is not valid.");
+            return;
+        }
+        if (checkOutDate != null && !checkOutDate.isBlank() && !ValidationUtils.isValidDateRange(checkInDate, checkOutDate)) {
+            ctx.status(400).result("Invalid parameters: check-out date is not valid.");
             return;
         }
         if (!ValidationUtils.isPositiveInteger(adultsStr)) {
@@ -346,45 +389,116 @@ public class TripController {
             ctx.status(400).result("Invalid parameters: room quantity is not valid.");
             return;
         }
-        if (radiusStr != null && !ValidationUtils.isPositiveInteger(radiusStr)) {
-            ctx.status(400).result("Invalid parameters: radius is not valid.");
-            return;
-        }
-        if (limitStr != null && !ValidationUtils.isPositiveInteger(limitStr)) {
-            ctx.status(400).result("Invalid parameters: limit is not valid.");
-            return;
-        }
+
         try {
             double lat = Double.parseDouble(latStr);
             double lng = Double.parseDouble(lngStr);
             int adults = Integer.parseInt(adultsStr);
             int rooms = Integer.parseInt(roomQuantityStr);
-            int radius = (radiusStr != null) ? Integer.parseInt(radiusStr) : 10;
-            int limit = (limitStr != null) ? Integer.parseInt(limitStr) : 5;
-            String hotelResponseJson = amadeusService.getHotelsByGeocode(lat, lng, radius);
+            double radiusKm = config.searchRadiusKm();
+            if (radiusStr != null && !radiusStr.isBlank()) {
+                try {
+                    radiusKm = Double.parseDouble(radiusStr);
+                } catch (NumberFormatException ignored) {
+                }
+            }
+
+            if (hotelSearchService != null) {
+                try {
+                    var fastResults = hotelSearchService.searchHotels(
+                            new HotelSearchService.HotelQuery(lat, lng, checkInDate, checkOutDate, adults, rooms, radiusKm));
+                    if (!fastResults.isEmpty()) {
+                        List<Map<String, Object>> hotels = normalizeHotelSummaries(fastResults);
+                        Map<String, Object> response = new HashMap<>();
+                        response.put("coordinates", Map.of("lat", lat, "lng", lng));
+                        response.put("offers", hotels);
+                        response.put("meta", Map.of(
+                                "count", hotels.size(),
+                                "radiusKm", radiusKm
+                        ));
+                        ctx.json(response);
+                        return;
+                    }
+                    logger.info("Fast hotel search returned no results, falling back to legacy flow");
+                } catch (Exception ex) {
+                    logger.warn("Fast hotel search failed, falling back to legacy flow: {}", ex.getMessage());
+                }
+            }
+
+            runLegacyNearbySearch(ctx, lat, lng, checkInDate, checkOutDate, adults, rooms);
+        } catch (Exception e) {
+            logger.error("Unexpected error while searching nearby hotels", e);
+            ctx.status(500).result("Internal Server Error: " + e.getMessage());
+        }
+    }
+
+    // Old way to search hotels if the fast one fails
+    private static List<Map<String, Object>> normalizeHotelSummaries(List<HotelSummary> summaries) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (HotelSummary summary : summaries) {
+            Map<String, Object> hotel = new HashMap<>();
+            Map<String, Object> hotelInfo = new HashMap<>();
+            hotelInfo.put("name", summary.name());
+            hotelInfo.put("latitude", summary.lat());
+            hotelInfo.put("longitude", summary.lng());
+            hotelInfo.put("address", summary.address());
+            if (summary.rating() != null && !summary.rating().isBlank()) {
+                hotelInfo.put("rating", summary.rating());
+            }
+
+            Map<String, Object> price = new HashMap<>();
+            price.put("total", summary.priceTotal());
+            price.put("currency", summary.currency());
+
+            Map<String, Object> offerContainer = new HashMap<>();
+            offerContainer.put("hotel", hotelInfo);
+            offerContainer.put("offers", List.of(Map.of("price", price)));
+            offerContainer.put("mapsLink", summary.mapsLink());
+
+            hotel.put("hotelId", summary.id());
+            hotel.put("offers", List.of(offerContainer));
+            hotel.put("map", Map.of("lat", summary.lat(), "lng", summary.lng(), "link", summary.mapsLink()));
+            results.add(hotel);
+        }
+        return results;
+    }
+
+    private static void runLegacyNearbySearch(Context ctx, double lat, double lng, String checkInDate, String checkOutDate, int adults, int rooms) {
+        try {
+            String hotelResponseJson = amadeusService.getHotelsByGeocode(lat, lng, 10);
             JsonArray hotelArray = JsonParser.parseString(hotelResponseJson).getAsJsonArray();
 
             List<Map<String, Object>> validOffers = new ArrayList<>();
 
             for (var element : hotelArray) {
-                var hotelObj = element.getAsJsonObject();
+                if (!element.isJsonObject()) continue;
+                JsonObject hotelObj = element.getAsJsonObject();
                 if (hotelObj.has("hotelId")) {
                     String hotelId = hotelObj.get("hotelId").getAsString();
                     try {
-                        String offerJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms);
+                        String offerJson = amadeusService.getHotelOffers(hotelId, adults, checkInDate, rooms, checkOutDate);
                         Map<String, Object> hotelData = new HashMap<>();
                         hotelData.put("hotelId", hotelId);
                         hotelData.put("offers", JsonParser.parseString(offerJson));
                         validOffers.add(hotelData);
                     } catch (ResponseException e) {
-                        System.out.println("[SKIP] " + hotelId + " => " + e.getMessage());
+                        if ("429".equals(e.getCode())) {
+                            logger.warn("Rate limit exceeded while fetching offers for {}: {}", hotelId, e.getMessage());
+                            ctx.status(429).result("Rate limit exceeded, retry later");
+                            return;
+                        }
+                        if ("400".equals(e.getCode())) {
+                            logger.info("Skipping hotel {} due to upstream bad request: {}", hotelId, e.getMessage());
+                            continue;
+                        }
+                        logger.warn("Failed to fetch offers for {}: {}", hotelId, e.getMessage());
                     }
                 }
-                if (validOffers.size() >= limit) break;
+                if (validOffers.size() >= 5) break;
             }
 
             if (validOffers.isEmpty()) {
-                ctx.status(404).result("No available hotel offers for the selected location and date.");
+                ctx.status(404).result("No available hotel offers");
                 return;
             }
 
@@ -394,11 +508,25 @@ public class TripController {
 
             ctx.contentType("application/json");
             ctx.result(new Gson().toJson(response));
+        } catch (ResponseException e) {
+            if ("429".equals(e.getCode())) {
+                logger.warn("Rate limit exceeded while searching hotels: {}", e.getMessage());
+                ctx.status(429).result("Rate limit exceeded, retry later");
+                return;
+            }
+            logger.error("Upstream service error during nearby search: {}", e.getMessage());
+            ctx.status(502).result("Upstream service error: " + e.getMessage());
+        } catch (TimeoutException e) {
+            logger.error("Nearby hotels request timed out", e);
+            ctx.status(504).result("Request timed out");
         } catch (Exception e) {
+            logger.error("Unexpected error while searching nearby hotels", e);
             ctx.status(500).result("Internal Server Error: " + e.getMessage());
         }
     }
+
     private static void handleNearbyAirports(Context ctx) {
+        if (!ensureAmadeusConfigured(ctx)) return;
         String latStr = ctx.queryParam("lat");
         String lngStr = ctx.queryParam("lng");
         String limitStr = ctx.queryParam("limit");
@@ -420,7 +548,8 @@ public class TripController {
             }
         }
         if (!ValidationUtils.isValidCoordinates(latStr, lngStr)) {
-            ctx.status(400).json(Map.of("error", "Invalid coordinates"));            return;
+            ctx.status(400).json(Map.of("error", "Invalid coordinates"));
+            return;
         }
         try {
             double lat = Double.parseDouble(latStr);
@@ -450,6 +579,8 @@ public class TripController {
             ctx.json(airports);
         } catch (ResponseException e) {
             ctx.status(502).json(Map.of("error", "Upstream service error"));
+        } catch (TimeoutException e) {
+            ctx.status(504).json(Map.of("error", "Request timed out"));
         } catch (Exception e) {
             ctx.status(500).json(
                     Map.of("error", "Internal Server Error", "message", e.getMessage())
@@ -457,4 +588,3 @@ public class TripController {
         }
     }
 }
-
