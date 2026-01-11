@@ -10,6 +10,8 @@ import io.github.cdimascio.dotenv.Dotenv;
 import io.javalin.Javalin;
 import org.example.HotelSearchService.HotelSummary;
 import io.javalin.http.Context;
+import org.example.GoogleMaps.GoogleJavalin;
+import org.example.GoogleMaps.MashupJavalin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,7 +97,15 @@ public class TripController {
         app.get("/trip-info", TripController::handleTripInfo);
 
         app.get("/nearby-airports", TripController::handleNearbyAirports);
+        GoogleJavalin googleJavalin = new GoogleJavalin(config);
+        googleJavalin.registerRoutes(app);
 
+        MashupJavalin mashupJavalin = new MashupJavalin(config, amadeusService);
+        mashupJavalin.flightsAndPolyline(app);
+        mashupJavalin.hotelsAndSights(app);
+        mashupJavalin.distToHotel(app);
+        mashupJavalin.distToAirport(app);
+        mashupJavalin.nearbyAirports(app);
     }
 
     /**

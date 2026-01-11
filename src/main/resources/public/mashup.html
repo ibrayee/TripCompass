@@ -18,23 +18,51 @@
     </ul>
 </nav>
 <div class="container">
+    <header class="page-header">
+        <h1>✨ Mashup Trip</h1>
+        <p>Combine flights, routes, and nearby stays in one search</p>
+    </header>
     <div id="map" style="height:500px;"></div>
-    <form id="mashup-form">
-        <input type="text" id="start-city" placeholder="Start city or airport">
-        <input type="text" id="end-city" placeholder="End city">
-        <input type="text" id="hotel-name" placeholder="Hotel (optional)">
-        <input type="text" id="place-type" placeholder="Place type (e.g. museum)">
-        <input type="date" id="check-in-date" placeholder="Check-in date">
-        <input type="number" id="adults" min="1" placeholder="Adults">
-        <input type="number" id="room-quantity" min="1" placeholder="Rooms">
-        <button type="submit" class="btn-primary">Show Trip</button>
+    <form id="mashup-form" class="search-card">
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="origin">From</label>
+                <input type="text" id="origin" placeholder="e.g. JFK" required>
+            </div>
+            <div class="form-group">
+                <label for="destination">To</label>
+                <input type="text" id="destination" placeholder="e.g. LGW" required>
+            </div>
+            <div class="form-group">
+                <label for="departureDate">Departure Date</label>
+                <input type="date" id="departureDate" required>
+            </div>
+            <div class="form-group">
+                <label for="adults">Passengers</label>
+                <input type="number" id="adults" min="1" value="1" required>
+            </div>
+        </div>
+        <label class="form-group">
+            <input type="checkbox" id="includeHotels" checked>
+            Include nearby hotels
+        </label>
+        <button type="submit" class="btn-primary" id="mashup-search-btn">
+            <span>Search</span>
+            <div class="spinner hidden"></div>
+        </button>
     </form>
-    <div id="results"></div>
+    <div class="results-container">
+        <h2 class="results-header">Available Flights</h2>
+        <div id="flight-results"></div>
+    </div>
+    <section id="hotel-section" class="results-container" style="display:none;">
+        <h2 class="results-header">Nearby Hotels</h2>
+        <div id="hotel-results"></div>
+    </section>
 </div>
 <div id="loading-overlay" class="hidden"><div class="spinner"></div></div>
 <script type="module" src="js/loading.js"></script>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrGvXIcYVGUllsp39JAWkg1t2DA8jFMI0&libraries=places&callback=initMap" async defer></script>
-<script src="js/loadGoogleMaps.js"></script>
 <script src="js/mashup.js"></script>
+<script src="js/loadGoogleMaps.js"></script>
 </body>
 </html>

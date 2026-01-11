@@ -3,8 +3,6 @@ package org.example.GoogleMaps;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.github.cdimascio.dotenv.Dotenv;
-
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -19,19 +17,21 @@ public class RouteInfo { // använder Google maps Distance API
     //hämta longitude och latitude från amadeus
 
 
-   private static final String apiKey = Dotenv.load().get("GOOGLE_MAPS_API_KEY");
-    String startPlace = "";
-    String endPlace = "";
-    String jSonRoute = "";
+    private final String apiKey;
+    private final String startPlace;
+    private final String endPlace;
+    private String jSonRoute = "";
 
-    public RouteInfo(String startPlace, String endPlace) {
-
+    public RouteInfo(String startPlace, String endPlace, String apiKey) {
+        this.apiKey = apiKey;
         this.startPlace = startPlace;
         this.endPlace = endPlace;
-
     }
 
     public void fetchRoute() {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("Google Maps API key missing");
+        }
         HttpClient httpClient = HttpClient.newHttpClient();
 
         String encodeStart = URLEncoder.encode(startPlace, StandardCharsets.UTF_8);
@@ -47,6 +47,10 @@ public class RouteInfo { // använder Google maps Distance API
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
+        if (response == null || response.body() == null) {
+            jSonRoute = "{}";
+            return;
+        }
         jSonRoute = response.body();
         // System.out.println(response.body());
 
@@ -59,12 +63,12 @@ public class RouteInfo { // använder Google maps Distance API
 
         JsonArray routesArr = responseJObj.getAsJsonArray("routes");
 
-        if (routesArr.size() > 0) {
+        if (routesArr != null && routesArr.size() > 0) {
             JsonObject answerArrFirst = routesArr.get(0).getAsJsonObject();
 
             JsonArray legs = answerArrFirst.getAsJsonArray("legs");
 
-            if (legs.size() > 0) {
+            if (legs != null && legs.size() > 0) {
 
                 JsonObject answerLegsArr = legs.get(0).getAsJsonObject();
 
@@ -72,7 +76,12 @@ public class RouteInfo { // använder Google maps Distance API
 
                 JsonObject timeTrip = answerLegsArr.getAsJsonObject("duration");
 
-                return "Distansen är : " + distanceKm.get("text").getAsString() + " Tiden är: " + timeTrip.get("text").getAsString();
+                if (distanceKm == null || timeTrip == null) {
+                    return "Ingen väg hittades";
+                }
+
+                return "Distansen är : " + distanceKm.get("text").getAsString()
+                        + " Tiden är: " + timeTrip.get("text").getAsString();
 
             } else {
 
@@ -88,9 +97,12 @@ public class RouteInfo { // använder Google maps Distance API
     public String getPolyline() {
         JsonObject polylineObj = JsonParser.parseString(jSonRoute).getAsJsonObject();
         JsonArray polyArr = polylineObj.getAsJsonArray("routes");
-        if (polyArr.size() > 0) {
+        if (polyArr != null && polyArr.size() > 0) {
             JsonObject routeTo = polyArr.get(0).getAsJsonObject();
             JsonObject overViewLine = routeTo.getAsJsonObject("overview_polyline");
+            if (overViewLine == null) {
+                return "No polyline could be found";
+            }
             String thePolyline = overViewLine.get("points").getAsString();
             System.out.println("The polyline code " + thePolyline);
             return thePolyline;
@@ -101,12 +113,15 @@ public class RouteInfo { // använder Google maps Distance API
     public String getDistance() {
         JsonObject responseJObj = JsonParser.parseString(jSonRoute).getAsJsonObject();
         JsonArray routesArr = responseJObj.getAsJsonArray("routes");
-        if (routesArr.size() > 0) {
+        if (routesArr != null && routesArr.size() > 0) {
             JsonObject answerArrFirst = routesArr.get(0).getAsJsonObject();
             JsonArray legs = answerArrFirst.getAsJsonArray("legs");
-            if (legs.size() > 0) {
+            if (legs != null && legs.size() > 0) {
                 JsonObject answerLegsArr = legs.get(0).getAsJsonObject();
                 JsonObject distanceKm = answerLegsArr.getAsJsonObject("distance");
+                if (distanceKm == null) {
+                    return null;
+                }
                 return distanceKm.get("text").getAsString();
             }
         }
@@ -115,12 +130,15 @@ public class RouteInfo { // använder Google maps Distance API
     public String getDuration() {
         JsonObject responseJObj = JsonParser.parseString(jSonRoute).getAsJsonObject();
         JsonArray routesArr = responseJObj.getAsJsonArray("routes");
-        if (routesArr.size() > 0) {
+        if (routesArr != null && routesArr.size() > 0) {
             JsonObject answerArrFirst = routesArr.get(0).getAsJsonObject();
             JsonArray legs = answerArrFirst.getAsJsonArray("legs");
-            if (legs.size() > 0) {
+            if (legs != null && legs.size() > 0) {
                 JsonObject answerLegsArr = legs.get(0).getAsJsonObject();
                 JsonObject timeTrip = answerLegsArr.getAsJsonObject("duration");
+                if (timeTrip == null) {
+                    return null;
+                }
                 return timeTrip.get("text").getAsString();
             }
         }
@@ -129,5 +147,3 @@ public class RouteInfo { // använder Google maps Distance API
 
 
 }
-
-

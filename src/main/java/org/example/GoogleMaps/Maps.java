@@ -6,7 +6,7 @@ import org.example.AmadeusService;
 
 //sammanställer från geocodings och skickar svar till en integrationsklass och sen till frontend
 public class Maps {
-
+/*
 
     private static final Dotenv dotenv = Dotenv.configure().load();
     private static final String GOOGLE_MAPS_API_KEY = dotenv.get("GOOGLE_MAPS_API_KEY");
@@ -34,6 +34,7 @@ public class Maps {
         routeInfo.getPolyline();
 
 */
+    /*
         Javalin app = Javalin.create().start(7000); // servern körs på port 7000
 
         // Lägg till Google Maps endpoints
@@ -47,6 +48,7 @@ public class Maps {
         mashup.nearbyAirports(app);
         System.out.println("Server igång på http://localhost:7000");
     }
+    */
     }
 
 
