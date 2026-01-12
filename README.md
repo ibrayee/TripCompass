@@ -1,6 +1,6 @@
 # TripCompass
 
-TripCompass is a small travel planning app that combines flight, hotel, and map data.
+TripCompass is a small travel planning app that combines flight, hotel, and map data with google Maps API + Amadeus API.
 It exposes a REST API with Javalin and serves a simple front-end from `index.html`.
 
 ## Tech stack
@@ -36,7 +36,6 @@ The app starts on `http://localhost:7000`.
 - `GET /search/nearby` — nearby hotels around coordinates (Amadeus).
 - `GET /trip-info` — combined flights + hotels for a destination.
 - `GET /nearby-airports` — airports close to coordinates.
-- `GET /route/info` — driving time/distance between two places (Google Maps).
 - `GET /route/polyline` — polyline between two places (Google Maps).
 - `GET /places/nearby` — nearby places around coordinates (Google Maps).
 - `GET /mashupJavalin/*` — older mashup endpoints for flights/hotels + maps.
