@@ -23,7 +23,7 @@ It exposes a REST API with Javalin and serves a simple front-end from `index.htm
    ```
 3. Start the server:
    ```bash
-   mvn exec:java
+   mvn clean compile exec:java
    ```
 
 The app starts on `http://localhost:7000`.
